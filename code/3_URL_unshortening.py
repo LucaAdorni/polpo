@@ -17,7 +17,9 @@ from tqdm import tqdm
 from pytimedinput import timedInput
 sys.path.append(f"{os.getcwd()}\\code\\utils")
 
-from utils import Worker, ThreadPool, iterate_pool, clearConsole
+from utils import iterate_pool, clearConsole
+from utils import Worker
+from utils import ThreadPool
 
 # Setup Repository
 with open("repo_info.txt", "r") as repo_info:
@@ -33,6 +35,7 @@ path_to_links = f"{path_to_data}links/"
 # Import all URLs we need to unshorten
 with open(f'{path_to_links}url_list.pkl', 'rb') as f: 
     url_list = pickle.load(f)
+    print(f"URLs in dataset: {len(url_list)}")
 
 # Import the dictionary of already unshortened URLs
 try:
