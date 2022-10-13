@@ -14,6 +14,15 @@ from threading import Thread
 import time
 import sys, signal
 
+from urllib.request import Request, urlopen
+from fake_useragent import UserAgent
+import random
+from bs4 import BeautifulSoup
+from IPython.core.display import clear_output
+import requests
+from urllib3.util.retry import Retry
+from urllib3.exceptions import MaxRetryError, ProxySchemeUnknown, ProtocolError
+
 # UNSHORTEN URLS ---------------------------------------------------------------
 
 class Worker(Thread):
@@ -71,13 +80,15 @@ def iterate_pool(min_r, max_r, new_urls, pool_n = 10000):
     pool = ThreadPool(pool_n)  # initialize a thread pool with 10k threads
     results = {}  # initialize our result dictionary
     session = requests.session()
+    session.proxies.update({'http': f'http://{working_proxies[random_proxy(working_proxies)]}'})
+
     now = time.time()
 
     def unshorten_url(url):
         """
         Function to unshorten a single URL
         """
-        try: r = session.head(url, allow_redirects=True, timeout = 10).url
+        try: r = session.head(url, timeout = 10).headers.get('location')
         except: r = 'Error'
         results[url] = r
 
@@ -92,3 +103,71 @@ def clearConsole():
     if os.name in ('nt', 'dos'):  # If Machine is running on Windows, use cls
         command = 'cls'
     os.system(command)
+
+def check_proxy(proxy):
+    """
+    Function to properly check each proxy, taken from: https://stackoverflow.com/questions/72747987/trouble-selecting-functional-proxies-from-a-list-of-proxies-quickly
+    """
+    try:
+        session = requests.Session()
+        session.headers['User-Agent'] = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_9_2) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/34.0.1847.131 Safari/537.36'
+        session.max_redirects = 300
+        proxy = proxy.split('\n', 1)[0]
+        req = session.get("http://google.com", proxies={'http':'http://' + proxy}, timeout=10, allow_redirects=True)
+        if req.status_code == 200:
+            return proxy
+
+    except requests.exceptions.ConnectTimeout as e:
+        return None
+    except requests.exceptions.ConnectionError as e:
+        return None
+    except ConnectionResetError as e:
+        return None
+    except requests.exceptions.HTTPError as e:
+        return None
+    except requests.exceptions.Timeout as e:
+        return None
+    except ProxySchemeUnknown as e:
+        return None
+    except ProtocolError as e:
+        return None
+    except requests.exceptions.ChunkedEncodingError as e:
+        return None
+    except requests.exceptions.TooManyRedirects as e:
+        return None
+
+# Retrieve a random index proxy (we need the index to delete it if not working)
+def random_proxy(working_proxies):
+  return random.randint(0, len(working_proxies) - 1)
+
+def get_proxies():
+    """
+    Code partly taken from: https://stackoverflow.com/questions/38785877/spoofing-ip-address-when-web-scraping-python
+    """
+    # Here I provide some proxies for not getting caught while scraping
+    ua = UserAgent() # From here we generate a random user agent
+    proxies = [] # Will contain proxies [ip, port]
+
+    # Retrieve latest proxies - for now just from ssl proxies
+    proxies_req = Request('https://www.sslproxies.org/')
+    proxies_req.add_header('User-Agent', ua.random)
+    proxies_doc = urlopen(proxies_req).read().decode('utf8')
+    # Now we parse the table through BeautifulSoup
+    soup = BeautifulSoup(proxies_doc, 'html.parser')
+    proxies_table = soup.find("table", {"class" : 'table table-striped table-bordered'})
+    # Save proxies in the array
+    for row in proxies_table.tbody.find_all('tr'):
+        proxies.append({
+            'ip':   row.find_all('td')[0].string,
+            'port': row.find_all('td')[1].string,
+            'anonymity': row.find_all('td')[4].string
+        })
+
+    # Iteratively check all the proxies we have, and keep only the functioning ones
+    working_proxies = []
+    for i in tqdm(range(0,len(proxies))):
+        working_proxies.append(check_proxy(proxies[i]['ip'] + ':' + proxies[i]['port']))
+
+    # Clean of the None values our list of working proxies
+    working_proxies = [proxy for proxy in working_proxies if proxy != None]
+    return working_proxies
