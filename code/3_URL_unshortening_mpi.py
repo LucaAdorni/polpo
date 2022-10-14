@@ -31,8 +31,9 @@ import requests
 from urllib3.util.retry import Retry
 from urllib3.exceptions import MaxRetryError, ProxySchemeUnknown, ProtocolError
 
-path_to_links = f"{os.getcwd()}/links/"
-
+path_to_repo = f"{os.getcwd()}/links/"
+path_to_data = f"{path_to_repo}data/"
+path_to_links = f"{path_to_data}links/"
 
 # 2. Custom Functions -------------------------------------------------
 
