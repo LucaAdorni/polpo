@@ -12,7 +12,5 @@ module load python/anaconda3
 #You may load a virtual environment 
 #source activate myenvironment
 
-#mprirun will start 49 instances of helloworld.py
 #$PBS_NODFILE tells mpirun which CPU's PBS reserved for the job
-#helloworld.py will print the jobs rank
 mpirun -n 50 -machinefile $PBS_NODEFILE python 3_URL_unshortening_mpi.py
