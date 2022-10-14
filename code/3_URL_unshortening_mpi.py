@@ -18,9 +18,7 @@ import pickle
 sys.path.append(f"{os.getcwd()}/utils")
 # Import libraries
 from concurrent.futures import ThreadPoolExecutor
-from queue import Queue
 import requests
-from threading import Thread
 import time
 import sys, signal
 
@@ -38,48 +36,15 @@ path_to_links = f"{os.getcwd()}/links/"
 
 # 2. Custom Functions -------------------------------------------------
 
-class Worker(Thread):
-    """ Thread executing tasks from a given tasks queue """
-    def __init__(self, tasks):
-        Thread.__init__(self)
-        self.tasks = tasks
-        self.daemon = True
-        self.start()
-
-    def run(self):
-        while True:
-            func, args, kargs = self.tasks.get()
-            try:
-                func(*args, **kargs)
-            except Exception as e:
-                # An exception happened in this thread
-                print(e)
-            finally:
-                # Mark this task as done, whether an exception happened or not
-                self.tasks.task_done()
-
-
-class ThreadPool:
-    """ Pool of threads consuming tasks from a queue """
-
-    def __init__(self, num_threads):
-        self.tasks = Queue(num_threads)
-        for _ in range(num_threads):
-            Worker(self.tasks)
-
-    def add_task(self, func, *args, **kargs):
-        """ Add a task to the queue """
-        self.tasks.put((func, args, kargs))
-
-    def map(self, func, args_list):
-        """ Add a list of tasks to the queue """
-        for args in args_list:
-            self.add_task(func, args)
-
-    def wait_completion(self):
-        """ Wait for completion of all the tasks in the queue """
-        self.tasks.join()
-
+results = {}
+session = requests.session()
+def unshorten_url(url):
+    """
+    Function to unshorten a single URL
+    """
+    try: r = session.head(url, timeout = 10).headers.get('location')
+    except: r = 'Error'
+    results[url] = r
 
 def iterate_pool(min_r, max_r, new_urls, pool_n = 10000):
     """
@@ -90,7 +55,7 @@ def iterate_pool(min_r, max_r, new_urls, pool_n = 10000):
     pool_n: number of Thread Pools we want to initialize
     """
     batch = new_urls[min_r:max_r]  # batch to be processed
-    pool = ThreadPool(pool_n)  # initialize a thread pool with 10k threads
+    pool = ThreadPoolExecutor(pool_n)  # initialize a thread pool with 10k threads
     results = {}  # initialize our result dictionary
     session = requests.session()
     session.proxies.update({'http': f'http://{working_proxies[random_proxy(working_proxies)]}'})
@@ -104,7 +69,7 @@ def iterate_pool(min_r, max_r, new_urls, pool_n = 10000):
         results[url] = r
 
     pool.map(unshorten_url, batch)  # process our batch
-    pool.wait_completion()
+    pool.shutdown()
     return results
 
 def check_proxy(proxy):
@@ -220,12 +185,12 @@ print(f'Received Working list: {len(working_proxies)}')
 if rank == 0:
     print("Loading the URL lists")
     # Import all URLs we need to unshorten
-    with open(f'{path_to_links}url_list_todo.pkl', 'rb') as f: 
+    with open(f'{path_to_links}url_list.pkl', 'rb') as f: 
         url_list = pickle.load(f)
         print(f"URLs in dataset: {len(url_list)}")
     # Import the dictionary of already unshortened URLs
     try:
-        with open(f'{path_to_links}url_dictionary2.pkl', 'rb') as f: 
+        with open(f'{path_to_links}url_dictionary.pkl', 'rb') as f: 
             url_dict = pickle.load(f)
         print("URL dictionary loaded")
     except:
@@ -234,7 +199,7 @@ if rank == 0:
     # Now remove all the URLs we have already unshortened
     url_list = [url for url in url_list if url not in url_dict.keys()]
     print(f"URLs to be unshortened: {len(url_list)}")
-    url_list = split_list(url_list[0:10000])
+    url_list = split_list(url_list)
 else:
     url_list = None
 
@@ -244,7 +209,7 @@ url_list = comm.scatter(url_list, root = 0)
 # PARAMETERS
 minimum = 0 # beginning of our list
 maximum = len(url_list) # end of our list len(new_urls)
-steps = 50 # how many urls per batch
+steps = 100 # how many urls per batch
 range_list = list(np.arange(minimum,maximum,steps))
 
 iter_count = 0
@@ -267,6 +232,9 @@ if rank == 0:
     url_proc = {**url_proc, **url_dict}
     print("")
     print(len(url_proc))
-    with open(f'{path_to_links}url_dictionary2.pkl', 'wb') as f: pickle.dump(url_proc, f)
+    with open(f'{path_to_links}url_dictionary.pkl', 'wb') as f: 
+        pickle.dump(url_proc, f)
+
+del url_proc, url_list
 
 exit()
