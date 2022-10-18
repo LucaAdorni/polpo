@@ -18,6 +18,8 @@ import os
 import re
 import pickle
 from tqdm import tqdm
+import sys
+sys.path.append(f"{os.getcwd()}/.local/bin") # import the temporary path where the server installed the module
 import snscrape.modules.twitter as sntwitter
 from concurrent.futures import ThreadPoolExecutor
 import time

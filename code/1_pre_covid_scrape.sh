@@ -12,5 +12,7 @@ module load python/anaconda3
 #You may load a virtual environment 
 #source activate myenvironment
 
+pip install --user snscrape
+
 #$PBS_NODFILE tells mpirun which CPU's PBS reserved for the job
-mpirun -n 50 -machinefile $PBS_NODEFILE python 1_pre_covid_scrape.py
+mpirun -n 50 -machinefile $PBS_NODEFILE python ./polpo/code/1_pre_covid_scrape.py
