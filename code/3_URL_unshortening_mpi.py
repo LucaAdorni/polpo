@@ -21,7 +21,6 @@ import sys
 import os
 import re
 import pickle
-sys.path.append(f"{os.getcwd()}/utils")
 # Import libraries
 from concurrent.futures import ThreadPoolExecutor
 import requests
