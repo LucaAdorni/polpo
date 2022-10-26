@@ -6,25 +6,33 @@
 
 # 0. Setup -------------------------------------------------
 #!/usr/bin/env python
-from mpi4py import MPI
-
-comm = MPI.COMM_WORLD # initialize communications
-rank = comm.Get_rank()
-size = comm.Get_size()
+try:
+    from mpi4py import MPI
+    comm = MPI.COMM_WORLD # initialize communications
+    rank = comm.Get_rank()
+    size = comm.Get_size()
+except:
+    print("Not running on a cluster")
+    rank = 0
 
 import numpy as np
 import pandas as pd
 import os
 import re
 import pickle
-from tqdm import tqdm
 import sys
-sys.path.append(f"{os.getcwd()}/.local/bin") # import the temporary path where the server installed the module
 import snscrape.modules.twitter as sntwitter
 from concurrent.futures import ThreadPoolExecutor
 import time
 
-path_to_repo = f"{os.getcwd()}/links/"
+try:
+    # Setup Repository
+    with open("repo_info.txt", "r") as repo_info:
+        path_to_repo = repo_info.readline()
+except:
+    path_to_repo = f"{os.getcwd()}/polpo/"
+    sys.path.append(f"{os.getcwd()}/.local/bin") # import the temporary path where the server installed the module
+
 path_to_data = f"{path_to_repo}data/"
 path_to_raw = f"{path_to_data}raw/"
 path_to_links = f"{path_to_data}links/"
@@ -58,7 +66,6 @@ def scrape_users(username):
         tweet_list.append(['Error', username])
     return tweet_list
 
-
 def iterate_scraping(min_r, max_r, user_list, pool_n = 10000):    
     """ Function to thread pool our scraping function """
     start = time.time()
@@ -84,23 +91,37 @@ print("Process - Rank: %d -----------------------------------------------------"
 
 if rank == 0:
     # First step will be to read the raw scraped files
-    post_df = pd.read_csv(f'{path_to_raw}tweets_without_duplicates_regions_sentiment_demographics_topic_emotion.csv')
+    #post_df = pd.read_csv(f'{path_to_raw}tweets_without_duplicates_regions_sentiment_demographics_topic_emotion.csv')
 
     # and get the list of users we want to scrape
-    user_list = post_df.scree_name.tolist()
-    user_list = list(set(user_list))
-    user_list = split_list(user_list)
-    del post_df
+    #user_list = post_df.scree_name.tolist()
+    #user_list = list(set(user_list))
+    with open(f'{path_to_raw}user_list.pkl', 'rb') as f: 
+        user_list = pickle.load(f)
+    #del post_df
+    # Add a check to see if the module is working
+    for i,tweet in enumerate(sntwitter.TwitterSearchScraper('from:{} since:{} until:{}'.format("BattagliaInfo", "2020-04-01", "2020-05-01")).get_items()):
+        if i>1:
+            break
+        print(tweet.id)
+    try:
+        user_list = split_list(user_list)
+    except:
+        print("")
 else:
     user_list = None
 
 # Now we send our splitted list of proxies to our nodes
-user_list = comm.scatter(user_list, root = 0)
+try:
+    user_list = comm.scatter(user_list, root = 0)
+except:
+    print("")
 
 # SCRAPING --------------------------------------------------------------------------------------
 
 try :
-    scraped_df = pd.read_feather(f'{path_to_raw}pre_covid_scrape_df_{rank}.pkl.gz', compression='gzip')
+    scraped_df = pd.read_pickle(f'{path_to_raw}pre_covid_scrape_df_{rank}.pkl.gz', compression='gzip')
+    scraped_df.drop_duplicates(inplace = True)
 except :
     scraped_df = pd.DataFrame() # initiate our empty list of tweets
 
@@ -111,7 +132,10 @@ end_date = '2020-02-29'
 
 try:
     # We start from the users we already have
-    minimum = scraped_df.scree_name.nunique()
+    print(len(user_list))
+    user_list = list(set(user_list) - set(scraped_df.scree_name.unique()))
+    print(len(user_list))
+    minimum = 0
 except:
     minimum = 0 # beginning of our list
 
@@ -129,18 +153,20 @@ for i in range(len(range_list)):
     except: 
         max_r = maximum # if we are out of range we use the list up to its maximum
     print("Range: {} to {}".format(min_r, max_r))
-    batch_list = iterate_scraping(min_r, max_r, user_list) # our iterating thread pool to request urls
+    batch_list = iterate_scraping(min_r, max_r, user_list, pool_n = 100) # our iterating thread pool to request urls
     tweet_list_scraped.append(batch_list) # we merge the results we already have with the ones of the current batch
     print("Batch ended")
     iter_count += steps
-    if iter_count % 2000 == 0 or max_r == maximum:
+    if iter_count % 20000 == 0 or max_r == maximum:
         # We first flatten out our list of tweets
         flat_list = [t for sublist in tweet_list_scraped for item in sublist for t in item]
+        # In case we have only errors, add a fake tweet
+        flat_list.append([0, "-", "-", "-", "-", "-"])
         # Creating a dataframe from the tweets list above 
         new_batch = pd.DataFrame(flat_list, columns=['tweet_ids', 'tweet_text', 'locations', 'dates', 'scree_name', 'user_id'])
         # drop errors
-        new_batch = new_batch.loc[new_batch.tweet_ids != 'Error']
+        new_batch = new_batch.loc[(new_batch.tweet_ids != 'Error')&(new_batch.tweet_ids != 0)]
         scraped_df = pd.concat([scraped_df, new_batch])
         scraped_df.reset_index(inplace = True, drop = True)
-        scraped_df.to_feather(f'{path_to_raw}pre_covid_scrape_df_{rank}.pkl.gz', compression='gzip')
-        print("Output Saved")
+        scraped_df.to_pickle(f'{path_to_raw}pre_covid_scrape_df_{rank}.pkl.gz', compression='gzip')
+        print(f"Output Saved - {min_r} to {max_r} out of {maximum}")
