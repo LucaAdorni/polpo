@@ -67,9 +67,9 @@ os.makedirs(path_to_topic, exist_ok = True)
 print("Process - Rank: %d -----------------------------------------------------"%rank)
 
 try:
-    train = pd.read_pickle(f"{path_to_topic}train.pkl.gz", compression = 'gzip')
-    val = pd.read_pickle(f"{path_to_topic}val.pkl.gz", compression = 'gzip')
-    test = pd.read_pickle(f"{path_to_topic}test.pkl.gz", compression = 'gzip')
+    train = pd.read_csv(f"{path_to_topic}train.csv.gz", compression = 'gzip')
+    val = pd.read_csv(f"{path_to_topic}val.csv.gz", compression = 'gzip')
+    test = pd.read_csv(f"{path_to_topic}test.csv.gz", compression = 'gzip')
 except:
 
     # Import our original dataset
@@ -97,9 +97,9 @@ except:
     print(f'Test Set: {test.shape}')
 
     # save the file
-    train.to_pickle(f"{path_to_topic}train.pkl.gz", compression = 'gzip')
-    val.to_pickle(f"{path_to_topic}val.pkl.gz", compression = 'gzip')
-    test.to_pickle(f"{path_to_topic}test.pkl.gz", compression = 'gzip')
+    train.to_csv(f"{path_to_topic}train.csv.gz", compression = 'gzip', index = False)
+    val.to_csv(f"{path_to_topic}val.csv.gz", compression = 'gzip', index = False)
+    test.to_csv(f"{path_to_topic}test.csv.gz", compression = 'gzip', index = False)
     print("Dataframes successfully saved")
 
 # Transform our topics into labels
@@ -157,6 +157,54 @@ test_dataset  = TopicDataset(tweets = train['tweet_text'], targets = test['topic
 # Now we define our Pytorch Lightning module
 ## The main Pytorch Lightning module
 class BertModule(pl.LightningModule):
+    class DataModule(pl.LightningDataModule):
+            def __init__(self, model_instance: pl.LightningModule) -> None:
+                super().__init__()
+                self.hparams.update(model_instance.hparams)
+                self.model = model_instance
+                self.generator = torch.Generator()
+                self.generator.manual_seed(self.model.hparams.random_seed)
+
+                # initialize datasets
+                self.train_dataset = train_dataset
+                self.dev_dataset = val_dataset
+                self.test_dataset = test_dataset
+
+            def train_dataloader(self) -> DataLoader:
+                return DataLoader(
+                    dataset=self.train_dataset,
+                    shuffle=self.hparams.shuffle_train_dataset,
+                    batch_size=self.hparams.batch_size,
+                    num_workers=self.hparams.loader_workers,
+                    worker_init_fn=self._seed_worker,
+                    generator=self.generator,
+                )
+
+            def val_dataloader(self) -> DataLoader:
+                return DataLoader(
+                    dataset=self.dev_dataset,
+                    shuffle=False,
+                    batch_size=self.hparams.batch_size,
+                    num_workers=self.hparams.loader_workers,
+                    worker_init_fn=self._seed_worker,
+                    generator=self.generator,
+                )
+
+            def test_dataloader(self) -> DataLoader:
+                return DataLoader(
+                    dataset=self.test_dataset,
+                    shuffle=False,
+                    batch_size=self.hparams.batch_size,
+                    num_workers=self.hparams.loader_workers,
+                    worker_init_fn=self._seed_worker,
+                    generator=self.generator,
+                )
+
+            def _seed_worker(self, worker_id):
+                worker_seed = torch.initial_seed() % 2**32
+                np.random.seed(worker_seed)
+                random.seed(worker_seed)
+
 
     def __init__(self,
                  num_labels: int = 3,
@@ -174,10 +222,13 @@ class BertModule(pl.LightningModule):
         
         self.pre_classifier = torch.nn.Linear(self.bert.config.hidden_size, self.bert.config.hidden_size)
         self.classifier = torch.nn.Linear(self.bert.config.hidden_size, self.num_labels)
-        self.dropout = torch.nn.Dropout(self.bert.config.seq_classif_dropout)
+        self.dropout = torch.nn.Dropout(0.2)
 
         # relu activation function
         self.relu =  torch.nn.ReLU()
+
+        # Build DataModule
+        self.data = self.DataModule(self)
         
         self.trainer_params = self._get_trainer_params()
 
@@ -258,9 +309,9 @@ class BertModule(pl.LightningModule):
         if self.sched is not None:
             self.sched.step()
     
-    def on_epoch_end(self):
-        if self.sched is not None:
-            self.sched.step()
+    #def on_epoch_end(self):
+        #if self.sched is not None:
+            #self.sched.step()
 
     def test_step(self, batch, batch_nb):
         input_ids = batch['input_ids']
@@ -299,17 +350,6 @@ class BertModule(pl.LightningModule):
         self.sched = scheduler
         self.optim = optimizer
         return [optimizer], [scheduler]
-
-    def train_dataloader(self):
-        #dist_sampler = torch.utils.data.distributed.DistributedSampler(train_dataset)
-        #return DataLoader(train_dataset, sampler=dist_sampler, batch_size=32)
-        return DataLoader(train_dataset, shuffle = True, batch_size=self.hparams.batch_size, num_workers=self.hparams.num_workers)
-
-    def val_dataloader(self):
-         return DataLoader(val_dataset,batch_size=self.hparams.batch_size, num_workers=self.hparams.num_workers)
-
-    def test_dataloader(self):
-        return DataLoader(test_dataset,batch_size=self.hparams.batch_size, num_workers=self.hparams.num_workers)
 
     def fit(self) -> None:
         self._set_seed(self.hparams.random_seed)
@@ -396,6 +436,7 @@ class BertModule(pl.LightningModule):
             "early_stop_patience": 10,
             "backup_n_epochs": 5,
             # Optimizer params
+            'learning_rate': 5e-05,
             "optimizer_name": "adamw",
             "optimizer_lr": 1e-04,
             "optimizer_weight_decay": 1e-3,
@@ -408,6 +449,8 @@ class BertModule(pl.LightningModule):
     def _add_model_specific_hparams(self) -> None:
         pass
 
+use_cuda = torch.cuda.is_available()
+print(f"Is CUDA Available? {use_cuda}")
 
 model = BertModule()
 model.fit()
