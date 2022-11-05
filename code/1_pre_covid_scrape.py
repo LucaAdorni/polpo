@@ -125,6 +125,20 @@ try :
 except :
     scraped_df = pd.DataFrame() # initiate our empty list of tweets
 
+
+try :
+    scraped_df2 = pd.read_pickle(f'{path_to_raw}pre_covid_scrape_df_2.pkl.gz', compression='gzip')
+    scraped_df2.drop_duplicates(inplace = True)
+except :
+    scraped_df2 = pd.DataFrame() # initiate our empty list of tweets    
+
+try :
+    scraped_df1 = pd.read_pickle(f'{path_to_raw}pre_covid_scrape_df_1.pkl.gz', compression='gzip')
+    scraped_df1.drop_duplicates(inplace = True)
+except :
+    scraped_df1 = pd.DataFrame() # initiate our empty list of tweets    
+
+
 # PARAMETERS -----------------------------------------------------------------------------------------------------
 
 start_date = '2020-01-01'
@@ -134,6 +148,7 @@ try:
     # We start from the users we already have
     print(len(user_list))
     user_list = list(set(user_list) - set(scraped_df.scree_name.unique()))
+    user_list = list(set(user_list) - set(scraped_df2.scree_name.unique()))
     print(len(user_list))
     minimum = 0
 except:
@@ -166,7 +181,7 @@ for i in range(len(range_list)):
         new_batch = pd.DataFrame(flat_list, columns=['tweet_ids', 'tweet_text', 'locations', 'dates', 'scree_name', 'user_id'])
         # drop errors
         new_batch = new_batch.loc[(new_batch.tweet_ids != 'Error')&(new_batch.tweet_ids != 0)]
-        scraped_df = pd.concat([scraped_df, new_batch])
+        scraped_df = pd.concat([scraped_df2, new_batch])
         scraped_df.reset_index(inplace = True, drop = True)
         scraped_df.to_pickle(f'{path_to_raw}pre_covid_scrape_df_{rank}.pkl.gz', compression='gzip')
         print(f"Output Saved - {min_r} to {max_r} out of {maximum}")
