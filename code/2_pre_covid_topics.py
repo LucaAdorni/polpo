@@ -1,7 +1,7 @@
 ###########################################################
 # Code to train a BERT model for topic recognition
 # Author: Luca Adorni
-# Date: October 2022
+# Date: November 2022
 ###########################################################
 
 # 0. Setup -------------------------------------------------
@@ -19,6 +19,8 @@ import numpy as np
 import pandas as pd
 import os
 import sys
+import re
+import pickle
 import random
 from sklearn.model_selection import train_test_split
 from sklearn.metrics import mean_absolute_error
@@ -28,6 +30,9 @@ from sklearn.metrics import f1_score
 from sklearn.metrics import accuracy_score
 from sklearn.metrics import classification_report
 from sklearn.metrics import roc_auc_score
+from sklearn.metrics import confusion_matrix
+import seaborn as sns
+import matplotlib.pyplot as plt
 
 import torch
 from torch.nn import functional as F
@@ -39,13 +44,14 @@ from pytorch_lightning import Trainer, seed_everything
 import transformers
 from transformers import AutoTokenizer, AutoModel, AutoConfig
 from typing import Callable, Dict, Generator, List, Tuple, Union
+from pathlib import PurePosixPath
+import itertools
 
 from pytorch_lightning.callbacks import (
     EarlyStopping,
     LearningRateMonitor,
     ModelCheckpoint,
 )
-
 
 try:
     # Setup Repository
@@ -55,12 +61,21 @@ except:
     path_to_repo = f"{os.getcwd()}/polpo/"
     sys.path.append(f"{os.getcwd()}/.local/bin") # import the temporary path where the server installed the module
 
+  
+print(path_to_repo)
+
 path_to_data = f"{path_to_repo}data/"
 path_to_raw = f"{path_to_data}raw/"
 path_to_links = f"{path_to_data}links/"
-path_to_topic = os.path.join(path_to_data, "topic/","")
+path_to_topic = f"{path_to_data}topic/"
+path_to_results = f"{path_to_data}results/"
+path_to_models = f"{path_to_data}models/"
+path_to_models_top = f"{path_to_models}topic_class/"
 
 os.makedirs(path_to_topic, exist_ok = True)
+os.makedirs(path_to_results, exist_ok = True)
+os.makedirs(path_to_models, exist_ok = True)
+os.makedirs(path_to_models_top, exist_ok = True)
 
 # 2. Read Files --------------------------------------------------------------------------------------------------
 
@@ -78,7 +93,7 @@ except:
     post_df = post_df[['tweet_text', 'topic']]
 
     # PARAMETERS
-    unused_size = 0.98
+    unused_size = 0.995
     test_size = 0.1
     val_size = 0.1
     train_size = 1 - test_size - val_size
@@ -97,16 +112,17 @@ except:
     print(f'Test Set: {test.shape}')
 
     # save the file
-    train.to_csv(f"{path_to_topic}train.csv.gz", compression = 'gzip', index = False)
-    val.to_csv(f"{path_to_topic}val.csv.gz", compression = 'gzip', index = False)
-    test.to_csv(f"{path_to_topic}test.csv.gz", compression = 'gzip', index = False)
+    train.to_pickle(f"{path_to_topic}train.pkl.gz", compression = 'gzip')
+    val.to_pickle(f"{path_to_topic}val.pkl.gz", compression = 'gzip')
+    test.to_pickle(f"{path_to_topic}test.pkl.gz", compression = 'gzip')
     print("Dataframes successfully saved")
 
 # Transform our topics into labels
 train.topic.replace({'economics': 1, 'politics': 2, 'art and entertainment': 0, 'health': 0, 'vaccine': 0, 'none': 0}, inplace = True)
 val.topic.replace({'economics': 1, 'politics': 2, 'art and entertainment': 0, 'health': 0, 'vaccine': 0, 'none': 0}, inplace = True)
 test.topic.replace({'economics': 1, 'politics': 2, 'art and entertainment': 0, 'health': 0, 'vaccine': 0, 'none': 0}, inplace = True)
-print(train.topic.nunique())
+print(f"\nNumber of classes: {train.topic.nunique()}")
+
 
 # 3. Define our BERT Module --------------------------------------------------------------------------------------------------
 
@@ -152,7 +168,38 @@ tokenizer = AutoTokenizer.from_pretrained("m-polignano-uniba/bert_uncased_L-12_H
 # Define our datasets
 train_dataset  = TopicDataset(tweets = train['tweet_text'], targets = train['topic'], tokenizer = tokenizer, max_len = 128)
 val_dataset  = TopicDataset(tweets = val['tweet_text'], targets = val['topic'], tokenizer = tokenizer, max_len = 128)
-test_dataset  = TopicDataset(tweets = train['tweet_text'], targets = test['topic'], tokenizer = tokenizer, max_len = 128)
+test_dataset  = TopicDataset(tweets = test['tweet_text'], targets = test['topic'], tokenizer = tokenizer, max_len = 128)
+
+# Define a function to get the best checkpoint
+def get_best_checkpoint_path(
+      batch_size: float,
+      learning_rate: float,
+      model_class: pl.LightningModule = None,
+      metric: str = "avg_val_loss",
+      asc: bool = True,
+      file_format: str = ".ckpt",
+  ) -> str:    
+  
+  checkpoints = [
+      PurePosixPath(f"{path_to_models_top}{el}")
+      for el in os.listdir(path_to_models_top)
+      if os.path.isfile(path = PurePosixPath(f"{path_to_models_top}{el}")) and PurePosixPath(f"{path_to_models_top}{el}").suffix == ".ckpt" and f"batch={batch_size}-lr={str(learning_rate)}" in PurePosixPath(f"{path_to_models_top}{el}").stem
+  ]
+  path_score = {
+      str(path): float(path.stem.split("=")[-1])
+      for path in checkpoints
+      if metric in path.stem
+  }
+  epoch_n = {
+      str(path): float(re.search("epoch=(.+?)-", path.stem).groups()[0])
+      for path in checkpoints
+      if metric in path.stem
+  }
+  if asc:
+      best_checkpoint_path = min(path_score, key=path_score.get)
+  else:
+      best_checkpoint_path = max(path_score, key=path_score.get)
+  return best_checkpoint_path, epoch_n[best_checkpoint_path]
 
 # Now we define our Pytorch Lightning module
 ## The main Pytorch Lightning module
@@ -217,6 +264,9 @@ class BertModule(pl.LightningModule):
         self._set_seed(self.hparams.random_seed)
         
         self.num_labels = num_labels
+
+                
+  
         config = AutoConfig.from_pretrained("m-polignano-uniba/bert_uncased_L-12_H-768_A-12_italian_alb3rt0")
         self.bert = AutoModel.from_pretrained("m-polignano-uniba/bert_uncased_L-12_H-768_A-12_italian_alb3rt0", config = config)
         
@@ -229,10 +279,18 @@ class BertModule(pl.LightningModule):
 
         # Build DataModule
         self.data = self.DataModule(self)
-        
+
         self.trainer_params = self._get_trainer_params()
 
-    
+    def predict_step(self, batch, batch_idx, dataloader_idx=0):
+
+        input_ids = batch['input_ids']
+        label = batch['label']
+        attention_mask = batch['attention_mask']
+        #token_type_ids = batch['token_type_ids']
+        y_hat = self(input_ids, attention_mask, label)
+        return y_hat
+
     def forward(self, input_ids, attention_mask, labels):
       
         outputs = self.bert(input_ids=input_ids, \
@@ -246,7 +304,7 @@ class BertModule(pl.LightningModule):
         logits = self.classifier(pooled_output)  # (bs, dim)
 
         return logits
-    
+
     def get_outputs(self, input_ids, attention_mask):
         outputs = self.bert(input_ids=input_ids, \
                          attention_mask=attention_mask)
@@ -255,7 +313,7 @@ class BertModule(pl.LightningModule):
         return pooled_output
         
 
-    def training_step(self, batch, batch_nb):
+    def training_step(self, batch, batch_nb) -> torch.Tensor:
         # batch
         input_ids = batch['input_ids']
         label = batch['label']
@@ -266,12 +324,27 @@ class BertModule(pl.LightningModule):
         # loss
         loss_fct = torch.nn.CrossEntropyLoss()
         loss = loss_fct(y_hat.view(-1, self.num_labels), label.view(-1))
-        
-        # logs
-        tensorboard_logs = {'train_loss': loss, 'learn_rate': self.optim.param_groups[0]['lr'] }
-        return {'loss': loss, 'log': tensorboard_logs}
 
-    def validation_step(self, batch, batch_nb):
+        self.log(
+            "train_loss",
+            loss,
+            on_step=True,
+            on_epoch=True,
+            prog_bar=True,
+            logger=True,
+            batch_size=self.hparams.batch_size,
+        )
+
+        return loss
+
+    def training_epoch_end(self, training_step_outputs) -> None:
+        self.avg_train_loss = torch.Tensor(
+            self._stack_outputs(training_step_outputs)
+        ).mean()  # stored in order to be accessed by Callbacks
+        self.log("avg_train_loss", self.avg_train_loss, logger=True)
+
+
+    def validation_step(self, batch, batch_nb) -> torch.Tensor:
         # batch
         input_ids = batch['input_ids']
         label = batch['label']
@@ -287,19 +360,23 @@ class BertModule(pl.LightningModule):
         a, y_hat = torch.max(y_hat, dim=1)
         val_acc = accuracy_score(y_hat.cpu(), label.cpu())
         val_acc = torch.tensor(val_acc)
-        
-        # logs
-        tensorboard_logs = {'val_loss': loss, 'val_acc': val_acc}
-        # can't log in validation step lossess, accuracy.  It wouldn't log it at every validation step
-        return {'val_loss': loss, 'val_acc': val_acc, 'progress_bar': tensorboard_logs}
 
-    def validation_epoch_end(self, outputs):
-        avg_loss = torch.stack([x['val_loss'] for x in outputs]).mean()
-        avg_val_acc = torch.stack([x['val_acc'] for x in outputs]).mean()
-        
-        # logs
-        tensorboard_logs = {'val_loss': avg_loss, 'val_acc': avg_val_acc}
-        return {'val_loss': avg_loss, 'progress_bar': tensorboard_logs, 'log': tensorboard_logs}
+        self.log(
+            "val_loss",
+            loss,
+            on_step=True,
+            on_epoch=True,
+            prog_bar=True,
+            logger=True,
+            batch_size=self.hparams.batch_size,
+        )
+        return loss
+
+    def validation_epoch_end(self, val_step_outputs) -> None:
+        self.avg_val_loss = torch.stack(
+            tuple(val_step_outputs)
+        ).mean()  # stored in order to be accessed by Callbacks
+        self.log("avg_val_loss", self.avg_val_loss, logger=True)
     
     def on_batch_end(self):
         #for group in self.optim.param_groups:
@@ -308,10 +385,6 @@ class BertModule(pl.LightningModule):
         # Without this, the learning rate will only change after every epoch
         if self.sched is not None:
             self.sched.step()
-    
-    #def on_epoch_end(self):
-        #if self.sched is not None:
-            #self.sched.step()
 
     def test_step(self, batch, batch_nb):
         input_ids = batch['input_ids']
@@ -326,15 +399,25 @@ class BertModule(pl.LightningModule):
         
         a, y_hat = torch.max(y_hat, dim=1)
         test_acc = accuracy_score(y_hat.cpu(), label.cpu())
+
+        self.log(
+            "test_loss",
+            loss,
+            on_step=True,
+            on_epoch=True,
+            prog_bar=True,
+            logger=True,
+            batch_size=self.hparams.batch_size,
+        )
+        return loss
         
-        return {'test_loss':loss, 'test_acc': torch.tensor(test_acc)}
 
-    def test_epoch_end(self, outputs):
-        avg_loss = torch.stack([x['test_loss'] for x in outputs]).mean()
-        avg_test_acc = torch.stack([x['test_acc'] for x in outputs]).mean()
+    def test_epoch_end(self, outputs) -> None:
+        self.avg_test_loss = torch.stack(
+            tuple(outputs)
+        ).mean()  # stored in order to be accessed by Callbacks
+        self.log("avg_test_loss", self.avg_test_loss, logger=True)
 
-        tensorboard_logs = {'avg_test_loss': avg_loss, 'avg_test_acc': avg_test_acc}
-        return {'avg_test_acc': avg_test_acc, 'log': tensorboard_logs, 'progress_bar': tensorboard_logs}
     
     # ---------------------
     # TRAINING SETUP
@@ -364,12 +447,18 @@ class BertModule(pl.LightningModule):
         if torch.cuda.is_available():
             torch.cuda.manual_seed_all(seed)
         seed_everything(seed)  # Pytorch Lightning function
+
+    def _stack_outputs(self, outputs) -> torch.Tensor:
+        if isinstance(outputs, list):
+            return [self._stack_outputs(output) for output in outputs]
+        elif isinstance(outputs, dict):
+            return outputs["loss"]
     
     def _get_trainer_params(self) -> Dict:
 
         backup_callback = ModelCheckpoint(
             dirpath=self.hparams.output_path,
-            filename="backup-{epoch}-{avg_val_loss:.2f}",
+            filename= f"batch={self.hparams.batch_size}-lr={str(self.hparams.learning_rate)}" + "backup-{epoch}-{avg_val_loss:.2f}",
             every_n_epochs=self.hparams.backup_n_epochs,
             save_on_train_epoch_end=True,
             verbose=self.hparams.verbose,
@@ -377,7 +466,7 @@ class BertModule(pl.LightningModule):
 
         checkpoint_callback = ModelCheckpoint(
             dirpath=self.hparams.output_path,
-            filename="{epoch}-{avg_val_loss:.2f}",
+            filename= f"batch={self.hparams.batch_size}-lr={str(self.hparams.learning_rate)}" + "{epoch}-{avg_val_loss:.2f}",
             monitor=self.hparams.checkpoint_monitor,
             mode=self.hparams.checkpoint_monitor_mode,
             verbose=self.hparams.verbose,
@@ -411,8 +500,9 @@ class BertModule(pl.LightningModule):
 
         return trainer_params
 
-    def load_from_checkpoint(cls, best_checkpoint_path, **kwargs) -> pl.LightningModule:
-        return cls.load_from_checkpoint(checkpoint_path=best_checkpoint_path)
+    def load_from_best_checkpoint(self, **kwargs) -> pl.LightningModule:
+        best_checkpoint_path, _ = get_best_checkpoint_path(self.hparams.batch_size, self.hparams.learning_rate, model_class=self, **kwargs)
+        return self.load_from_checkpoint(checkpoint_path=best_checkpoint_path)
 
     def _add_default_hparams(self) -> None:
         default_params = {
@@ -421,13 +511,13 @@ class BertModule(pl.LightningModule):
             "shuffle_train_dataset": True,
             "batch_size": 32,
             "loader_workers": 8,
-            "output_path": path_to_topic,
+            "output_path": path_to_models_top,
             # Trainer params
             "verbose": True,
             "accumulate_grad_batches": 1,
             "accelerator": "auto",
             "devices": 1,
-            "max_epochs": 10,
+            "max_epochs": 6,
             # Callback params
             "checkpoint_monitor": "avg_val_loss",
             "checkpoint_monitor_mode": "min",
@@ -449,9 +539,88 @@ class BertModule(pl.LightningModule):
     def _add_model_specific_hparams(self) -> None:
         pass
 
+
+# define a function that saves figures
+def save_fig(fig_id, tight_layout=True):
+    # The path of the figures folder ./Figures/fig_id.png (fig_id is a variable that you specify 
+    # when you call the function)
+    path = os.path.join(path_to_repo,"figures", fig_id + ".pdf") 
+    print("Saving figure", fig_id)
+    if tight_layout:
+        plt.tight_layout()
+    plt.savefig(path, format='pdf', dpi=300)
+    
+# Code to plot the confusion matrix and the main scores of our model
+
+def model_scores_multiclass(y, y_hat, name = ''):
+    """
+    Plot the scores for a multiclass model (e.g. OVO/OVR)
+    model: our multiclass model
+    X: our predictors
+    y: true values of y
+    name: specify the name if we want to save the figure
+    """
+    f1score = f1_score(y,y_hat, average = 'macro')
+    f1score_all = f1_score(y,y_hat, average = None)
+    f1score_gap = max(f1score_all)- min(f1score_all)
+    accuracy = accuracy_score(y, y_hat)
+    print("F1-Score Macro = {}".format(round(f1score,5)))
+    print("F1-Score Gap = {}".format(round(f1score_gap,5)))
+    print("Accuracy = {}".format(round(accuracy,5)))
+    print("")
+    print(classification_report(y,y_hat,digits=5))
+    cm = confusion_matrix(y, y_hat)
+    df_cm = pd.DataFrame(cm, columns=["0","1", "2"], index = ["0","1", "2"])
+    df_cm.index.name = 'Actual'
+    df_cm.columns.name = 'Predicted'
+    plt.figure(figsize = (10,8))
+    sns.set(font_scale=1.4)#for label size
+    sns.heatmap(df_cm, cmap="Blues", annot=True, fmt='g',annot_kws={"size": 16})# font size
+    if name != '': 
+      plt.title(name)
+      save_fig(name)
+    plt.show() 
+    return {'f1':f1score, 'f1_gap': f1score_gap, 'acc': accuracy}
+
 use_cuda = torch.cuda.is_available()
 print(f"Is CUDA Available? {use_cuda}")
 
-model = BertModule()
-model.fit()
-del model
+# Loop over a variety of Parameters
+learning_rates = [5e-5, 3e-5, 1e-4, 2e-5]
+batch_size = [32, 64]
+parameters = list(itertools.product(learning_rates, batch_size))
+
+# Initialize a list to store all our results
+pred_performance = {}
+
+# Loop and train a variety of BERT Models:
+for lr, batch in parameters:
+  print("-"*100)
+  print(f"\nTraining model with: learning rate: {lr}, batch size: {batch}\n")
+  print("-"*100)
+
+  # Initialize the model
+  model = BertModule(learning_rate = lr, batch_size = batch)
+  # Fit the model
+  model.fit()
+
+  # Now within the same parameter instance, load the model and get the performance over the test set
+  model.load_from_best_checkpoint()
+  trainer_pred = Trainer()
+  pred = trainer_pred.predict(model, model.data.test_dataloader())
+
+  # First we flatten our list of tensors into a list of predictions
+  pred = [y_hat for tensor in pred for y_hat in tensor.tolist()]
+  # Then we transform it into a dataframe
+  pred = pd.DataFrame(pred, columns = ['topic_0', 'topic_1', 'topic_2'])
+  # Now we calculate the correct topic
+  pred['final_pred'] = pred.apply(lambda x: np.argmax(x), axis = 1)
+  # Now plot the performances of our model
+  pred_performance[f'lr_{str(lr)}_batch_{batch}'] = model_scores_multiclass(test.topic, pred.final_pred, name = f'BERT-Topic-lr={str(lr)}-batch={batch}')
+  # Delete the model to save memory
+  del model
+
+
+# Now save all the performances of our models
+with open(f'{path_to_results}topic_performance.pkl', 'wb') as f:
+    pickle.dump(pred_performance, f)
