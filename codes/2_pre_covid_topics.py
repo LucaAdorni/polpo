@@ -37,7 +37,7 @@ import matplotlib.pyplot as plt
 import torch
 from torch.nn import functional as F
 from torch.utils.data import DataLoader, Dataset, RandomSampler, random_split
-from torchvision import transforms
+#from torchvision import transforms
 import pytorch_lightning as pl
 from pytorch_lightning import loggers as pl_loggers
 from pytorch_lightning import Trainer, seed_everything
@@ -65,13 +65,16 @@ except:
 print(path_to_repo)
 
 path_to_data = f"{path_to_repo}data/"
+path_to_figures = f"{path_to_repo}figures/"
 path_to_raw = f"{path_to_data}raw/"
 path_to_links = f"{path_to_data}links/"
 path_to_topic = f"{path_to_data}topic/"
 path_to_results = f"{path_to_data}results/"
 path_to_models = f"{path_to_data}models/"
 path_to_models_top = f"{path_to_models}topic_class/"
+path_to_alberto = "m-polignano-uniba/bert_uncased_L-12_H-768_A-12_italian_alb3rt0"
 
+os.makedirs(path_to_figures, exist_ok = True)
 os.makedirs(path_to_topic, exist_ok = True)
 os.makedirs(path_to_results, exist_ok = True)
 os.makedirs(path_to_models, exist_ok = True)
@@ -82,9 +85,9 @@ os.makedirs(path_to_models_top, exist_ok = True)
 print("Process - Rank: %d -----------------------------------------------------"%rank)
 
 try:
-    train = pd.read_csv(f"{path_to_topic}train.csv.gz", compression = 'gzip')
-    val = pd.read_csv(f"{path_to_topic}val.csv.gz", compression = 'gzip')
-    test = pd.read_csv(f"{path_to_topic}test.csv.gz", compression = 'gzip')
+    train = pd.read_pickle(f"{path_to_topic}train.pkl.gz", compression = 'gzip')
+    val = pd.read_pickle(f"{path_to_topic}val.pkl.gz", compression = 'gzip')
+    test = pd.read_pickle(f"{path_to_topic}test.pkl.gz", compression = 'gzip')
 except:
 
     # Import our original dataset
@@ -163,7 +166,12 @@ class TopicDataset(Dataset):
         }
 
 # Define our main tokenizer
-tokenizer = AutoTokenizer.from_pretrained("m-polignano-uniba/bert_uncased_L-12_H-768_A-12_italian_alb3rt0")
+tokenizer = AutoTokenizer.from_pretrained("/home/adorni/polpo/alberto/tokenizer/models--m-polignano-uniba--bert_uncased_L-12_H-768_A-12_italian_alb3rt0/snapshots/4454cfbc82952da79729e33e81c37a72dc095b4b")
+
+# Remove index
+train.reset_index(inplace = True, drop = True)
+val.reset_index(inplace = True, drop = True)
+test.reset_index(inplace = True, drop = True)
 
 # Define our datasets
 train_dataset  = TopicDataset(tweets = train['tweet_text'], targets = train['topic'], tokenizer = tokenizer, max_len = 128)
@@ -266,9 +274,8 @@ class BertModule(pl.LightningModule):
         self.num_labels = num_labels
 
                 
-  
-        config = AutoConfig.from_pretrained("m-polignano-uniba/bert_uncased_L-12_H-768_A-12_italian_alb3rt0")
-        self.bert = AutoModel.from_pretrained("m-polignano-uniba/bert_uncased_L-12_H-768_A-12_italian_alb3rt0", config = config)
+        config = AutoConfig.from_pretrained(path_to_alberto)
+        self.bert = AutoModel.from_pretrained(path_to_alberto)
         
         self.pre_classifier = torch.nn.Linear(self.bert.config.hidden_size, self.bert.config.hidden_size)
         self.classifier = torch.nn.Linear(self.bert.config.hidden_size, self.num_labels)
@@ -502,6 +509,7 @@ class BertModule(pl.LightningModule):
 
     def load_from_best_checkpoint(self, **kwargs) -> pl.LightningModule:
         best_checkpoint_path, _ = get_best_checkpoint_path(self.hparams.batch_size, self.hparams.learning_rate, model_class=self, **kwargs)
+        print(best_checkpoint_path)
         return self.load_from_checkpoint(checkpoint_path=best_checkpoint_path)
 
     def _add_default_hparams(self) -> None:
@@ -510,14 +518,14 @@ class BertModule(pl.LightningModule):
             "deterministic": True,
             "shuffle_train_dataset": True,
             "batch_size": 32,
-            "loader_workers": 8,
+            "loader_workers": 0,
             "output_path": path_to_models_top,
             # Trainer params
             "verbose": True,
             "accumulate_grad_batches": 1,
-            "accelerator": "auto",
+            "accelerator": 'gpu',
             "devices": 1,
-            "max_epochs": 6,
+            "max_epochs": 7,
             # Callback params
             "checkpoint_monitor": "avg_val_loss",
             "checkpoint_monitor_mode": "min",
@@ -586,7 +594,7 @@ use_cuda = torch.cuda.is_available()
 print(f"Is CUDA Available? {use_cuda}")
 
 # Loop over a variety of Parameters
-learning_rates = [5e-5, 3e-5, 1e-4, 2e-5]
+learning_rates = [5e-5, 3e-5]
 batch_size = [32, 64]
 parameters = list(itertools.product(learning_rates, batch_size))
 
@@ -595,30 +603,38 @@ pred_performance = {}
 
 # Loop and train a variety of BERT Models:
 for lr, batch in parameters:
-  print("-"*100)
-  print(f"\nTraining model with: learning rate: {lr}, batch size: {batch}\n")
-  print("-"*100)
+    print("-"*100)
+    print(f"\nTraining model with: learning rate: {lr}, batch size: {batch}\n")
+    print("-"*100)
 
-  # Initialize the model
-  model = BertModule(learning_rate = lr, batch_size = batch)
-  # Fit the model
-  model.fit()
+    # Initialize the model
+    model = BertModule(learning_rate = lr, batch_size = batch)
+    # Fit the model
+    try:
+        model.load_from_best_checkpoint()
+        print("Model already trained")
+    except:  
+        print("Fitting new model")
+        model.fit()
 
-  # Now within the same parameter instance, load the model and get the performance over the test set
-  model.load_from_best_checkpoint()
-  trainer_pred = Trainer()
-  pred = trainer_pred.predict(model, model.data.test_dataloader())
+        # Now within the same parameter instance, load the model and get the performance over the test set
+        model.load_from_best_checkpoint()
+        
+    
+    trainer_pred = Trainer()
+    pred = trainer_pred.predict(model, model.data.test_dataloader())
 
-  # First we flatten our list of tensors into a list of predictions
-  pred = [y_hat for tensor in pred for y_hat in tensor.tolist()]
-  # Then we transform it into a dataframe
-  pred = pd.DataFrame(pred, columns = ['topic_0', 'topic_1', 'topic_2'])
-  # Now we calculate the correct topic
-  pred['final_pred'] = pred.apply(lambda x: np.argmax(x), axis = 1)
-  # Now plot the performances of our model
-  pred_performance[f'lr_{str(lr)}_batch_{batch}'] = model_scores_multiclass(test.topic, pred.final_pred, name = f'BERT-Topic-lr={str(lr)}-batch={batch}')
-  # Delete the model to save memory
-  del model
+    # First we flatten our list of tensors into a list of predictions
+    pred = [y_hat for tensor in pred for y_hat in tensor.tolist()]
+    # Then we transform it into a dataframe
+    pred = pd.DataFrame(pred, columns = ['topic_0', 'topic_1', 'topic_2'])
+    # Now we calculate the correct topic
+    pred['final_pred'] = pred.apply(lambda x: np.argmax(x), axis = 1)
+    # Now plot the performances of our model
+    pred_performance[f'lr_{str(lr)}_batch_{batch}'] = model_scores_multiclass(test.topic, pred.final_pred, name = f'BERT-Topic-lr={str(lr)}-batch={batch}')
+    # Delete the model to save memory
+    del model
+    torch.cuda.empty_cache() # PyTorch thing
 
 
 # Now save all the performances of our models
