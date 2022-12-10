@@ -87,18 +87,20 @@ def iterate_scraping(min_r, max_r, user_list, pool_n = 10000):
 
 # 2. Read Files --------------------------------------------------------------------------------------------------
 
-print("Process - Rank: %d -----------------------------------------------------"%comm.rank)
+print("Process - Rank: %d -----------------------------------------------------"%rank)
 
 if rank == 0:
-    # First step will be to read the raw scraped files
-    #post_df = pd.read_csv(f'{path_to_raw}tweets_without_duplicates_regions_sentiment_demographics_topic_emotion.csv')
+    try:
+        with open(f'{path_to_raw}user_list.pkl', 'rb') as f: 
+            user_list = pickle.load(f)
+    except:
+        # First step will be to read the raw scraped files
+        post_df = pd.read_csv(f'{path_to_raw}tweets_without_duplicates_regions_sentiment_demographics_topic_emotion.csv')
 
-    # and get the list of users we want to scrape
-    #user_list = post_df.scree_name.tolist()
-    #user_list = list(set(user_list))
-    with open(f'{path_to_raw}user_list.pkl', 'rb') as f: 
-        user_list = pickle.load(f)
-    #del post_df
+        # and get the list of users we want to scrape
+        user_list = post_df.scree_name.tolist()
+        user_list = list(set(user_list))
+        del post_df
     # Add a check to see if the module is working
     for i,tweet in enumerate(sntwitter.TwitterSearchScraper('from:{} since:{} until:{}'.format("BattagliaInfo", "2020-04-01", "2020-05-01")).get_items()):
         if i>1:
@@ -119,25 +121,8 @@ except:
 
 # SCRAPING --------------------------------------------------------------------------------------
 
-try :
-    scraped_df = pd.read_pickle(f'{path_to_raw}pre_covid_scrape_df_{rank}.pkl.gz', compression='gzip')
-    scraped_df.drop_duplicates(inplace = True)
-except :
-    scraped_df = pd.DataFrame() # initiate our empty list of tweets
-
-
-try :
-    scraped_df2 = pd.read_pickle(f'{path_to_raw}pre_covid_scrape_df_2.pkl.gz', compression='gzip')
-    scraped_df2.drop_duplicates(inplace = True)
-except :
-    scraped_df2 = pd.DataFrame() # initiate our empty list of tweets    
-
-try :
-    scraped_df1 = pd.read_pickle(f'{path_to_raw}pre_covid_scrape_df_1.pkl.gz', compression='gzip')
-    scraped_df1.drop_duplicates(inplace = True)
-except :
-    scraped_df1 = pd.DataFrame() # initiate our empty list of tweets    
-
+with open(f"{path_to_raw}scraped_users.pkl", "rb") as fp:   # Unpickling
+    scraped_users = pickle.load(fp)
 
 # PARAMETERS -----------------------------------------------------------------------------------------------------
 
@@ -147,10 +132,10 @@ end_date = '2020-02-29'
 try:
     # We start from the users we already have
     print(len(user_list))
-    user_list = list(set(user_list) - set(scraped_df.scree_name.unique()))
-    user_list = list(set(user_list) - set(scraped_df2.scree_name.unique()))
+    user_list = list(set(user_list) - set(scraped_users.tolist()))
     print(len(user_list))
     minimum = 0
+    scraped_users = scraped_users.tolist()
 except:
     minimum = 0 # beginning of our list
 
@@ -161,6 +146,7 @@ range_list = list(np.arange(minimum,maximum,steps))
 iter_count = 0
 
 tweet_list_scraped = []
+scraped_df = pd.DataFrame()
 for i in range(len(range_list)):
     min_r = range_list[i]
     try: 
@@ -170,6 +156,7 @@ for i in range(len(range_list)):
     print("Range: {} to {}".format(min_r, max_r))
     batch_list = iterate_scraping(min_r, max_r, user_list, pool_n = 100) # our iterating thread pool to request urls
     tweet_list_scraped.append(batch_list) # we merge the results we already have with the ones of the current batch
+    scraped_users = scraped_users + user_list[min_r:max_r] # Iteratively add the new scraped users
     print("Batch ended")
     iter_count += steps
     if iter_count % 20000 == 0 or max_r == maximum:
@@ -181,7 +168,11 @@ for i in range(len(range_list)):
         new_batch = pd.DataFrame(flat_list, columns=['tweet_ids', 'tweet_text', 'locations', 'dates', 'scree_name', 'user_id'])
         # drop errors
         new_batch = new_batch.loc[(new_batch.tweet_ids != 'Error')&(new_batch.tweet_ids != 0)]
-        scraped_df = pd.concat([scraped_df2, new_batch])
+        scraped_df = pd.concat([scraped_df, new_batch])
         scraped_df.reset_index(inplace = True, drop = True)
         scraped_df.to_pickle(f'{path_to_raw}pre_covid_scrape_df_{rank}.pkl.gz', compression='gzip')
         print(f"Output Saved - {min_r} to {max_r} out of {maximum}")
+
+        # Then add the scraped users we have done with the ones we have already did
+        with open(f"{path_to_raw}scraped_users{rank}.pkl", "wb") as fp:   #Pickling
+            pickle.dump(scraped_users, fp)
