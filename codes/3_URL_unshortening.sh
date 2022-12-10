@@ -10,7 +10,7 @@ cd $PBS_O_WORKDIR
 module load python/anaconda3
 
 #You may load a virtual environment 
-#source activate myenvironment
+source activate polpo
 
 #$PBS_NODFILE tells mpirun which CPU's PBS reserved for the job
 mpirun -n 50 -machinefile $PBS_NODEFILE python 3_URL_unshortening_mpi.py

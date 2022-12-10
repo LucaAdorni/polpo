@@ -31,6 +31,8 @@ from sklearn.metrics import accuracy_score
 from sklearn.metrics import classification_report
 from sklearn.metrics import roc_auc_score
 from sklearn.metrics import confusion_matrix
+from sklearn.metrics import precision_score
+from sklearn.metrics import recall_score
 import seaborn as sns
 import matplotlib.pyplot as plt
 
@@ -85,46 +87,56 @@ os.makedirs(path_to_models_top, exist_ok = True)
 print("Process - Rank: %d -----------------------------------------------------"%rank)
 
 try:
-    train = pd.read_pickle(f"{path_to_topic}train.pkl.gz", compression = 'gzip')
-    val = pd.read_pickle(f"{path_to_topic}val.pkl.gz", compression = 'gzip')
-    test = pd.read_pickle(f"{path_to_topic}test.pkl.gz", compression = 'gzip')
+    # Now load all the performances of our models
+    with open(f'{path_to_results}topic_performance.pkl', 'rb') as f:
+        pred_performance = pickle.load(f)
+    # If we can load it, we have already trained our models
+    train_completed = True
 except:
+    train_completed = False
 
-    # Import our original dataset
-    post_df = pd.read_csv(f'{path_to_raw}tweets_without_duplicates_regions_sentiment_demographics_topic_emotion.csv')
-    # Drop columns we do not need
-    post_df = post_df[['tweet_text', 'topic']]
+if train_completed == False:
+    try:
+        train = pd.read_pickle(f"{path_to_topic}train.pkl.gz", compression = 'gzip')
+        val = pd.read_pickle(f"{path_to_topic}val.pkl.gz", compression = 'gzip')
+        test = pd.read_pickle(f"{path_to_topic}test.pkl.gz", compression = 'gzip')
+    except:
 
-    # PARAMETERS
-    unused_size = 0.995
-    test_size = 0.1
-    val_size = 0.1
-    train_size = 1 - test_size - val_size
-    tag_size = '_02'
-    random_seed = 42
-    random.seed(random_seed)
+        # Import our original dataset
+        post_df = pd.read_csv(f'{path_to_raw}tweets_without_duplicates_regions_sentiment_demographics_topic_emotion.csv')
+        # Drop columns we do not need
+        post_df = post_df[['tweet_text', 'topic']]
 
-    # Perform split into train and test
-    train, _ = train_test_split(post_df, test_size = unused_size, random_state = random_seed, stratify = post_df.topic)
-    train, test = train_test_split(train, test_size = test_size, random_state = random_seed, stratify = train.topic)
-    train, val = train_test_split(train, test_size = val_size, random_state = random_seed, stratify = train.topic)
+        # PARAMETERS
+        unused_size = 0.995
+        test_size = 0.1
+        val_size = 0.1
+        train_size = 1 - test_size - val_size
+        tag_size = '_02'
+        random_seed = 42
+        random.seed(random_seed)
 
-    # Print dataset shapes
-    print(f'Training Set: {train.shape}')
-    print(f'Validation Set: {val.shape}')
-    print(f'Test Set: {test.shape}')
+        # Perform split into train and test
+        train, _ = train_test_split(post_df, test_size = unused_size, random_state = random_seed, stratify = post_df.topic)
+        train, test = train_test_split(train, test_size = test_size, random_state = random_seed, stratify = train.topic)
+        train, val = train_test_split(train, test_size = val_size, random_state = random_seed, stratify = train.topic)
 
-    # save the file
-    train.to_pickle(f"{path_to_topic}train.pkl.gz", compression = 'gzip')
-    val.to_pickle(f"{path_to_topic}val.pkl.gz", compression = 'gzip')
-    test.to_pickle(f"{path_to_topic}test.pkl.gz", compression = 'gzip')
-    print("Dataframes successfully saved")
+        # Print dataset shapes
+        print(f'Training Set: {train.shape}')
+        print(f'Validation Set: {val.shape}')
+        print(f'Test Set: {test.shape}')
 
-# Transform our topics into labels
-train.topic.replace({'economics': 1, 'politics': 2, 'art and entertainment': 0, 'health': 0, 'vaccine': 0, 'none': 0}, inplace = True)
-val.topic.replace({'economics': 1, 'politics': 2, 'art and entertainment': 0, 'health': 0, 'vaccine': 0, 'none': 0}, inplace = True)
-test.topic.replace({'economics': 1, 'politics': 2, 'art and entertainment': 0, 'health': 0, 'vaccine': 0, 'none': 0}, inplace = True)
-print(f"\nNumber of classes: {train.topic.nunique()}")
+        # save the file
+        train.to_pickle(f"{path_to_topic}train.pkl.gz", compression = 'gzip')
+        val.to_pickle(f"{path_to_topic}val.pkl.gz", compression = 'gzip')
+        test.to_pickle(f"{path_to_topic}test.pkl.gz", compression = 'gzip')
+        print("Dataframes successfully saved")
+
+    # Transform our topics into labels
+    train.topic.replace({'economics': 1, 'politics': 2, 'art and entertainment': 0, 'health': 0, 'vaccine': 0, 'none': 0}, inplace = True)
+    val.topic.replace({'economics': 1, 'politics': 2, 'art and entertainment': 0, 'health': 0, 'vaccine': 0, 'none': 0}, inplace = True)
+    test.topic.replace({'economics': 1, 'politics': 2, 'art and entertainment': 0, 'health': 0, 'vaccine': 0, 'none': 0}, inplace = True)
+    print(f"\nNumber of classes: {train.topic.nunique()}")
 
 
 # 3. Define our BERT Module --------------------------------------------------------------------------------------------------
@@ -164,19 +176,6 @@ class TopicDataset(Dataset):
             'attention_mask': (encoding['attention_mask']).flatten(),
             'token_type_ids': (encoding['token_type_ids']).flatten()
         }
-
-# Define our main tokenizer
-tokenizer = AutoTokenizer.from_pretrained("/home/adorni/polpo/alberto/tokenizer/models--m-polignano-uniba--bert_uncased_L-12_H-768_A-12_italian_alb3rt0/snapshots/4454cfbc82952da79729e33e81c37a72dc095b4b")
-
-# Remove index
-train.reset_index(inplace = True, drop = True)
-val.reset_index(inplace = True, drop = True)
-test.reset_index(inplace = True, drop = True)
-
-# Define our datasets
-train_dataset  = TopicDataset(tweets = train['tweet_text'], targets = train['topic'], tokenizer = tokenizer, max_len = 128)
-val_dataset  = TopicDataset(tweets = val['tweet_text'], targets = val['topic'], tokenizer = tokenizer, max_len = 128)
-test_dataset  = TopicDataset(tweets = test['tweet_text'], targets = test['topic'], tokenizer = tokenizer, max_len = 128)
 
 # Define a function to get the best checkpoint
 def get_best_checkpoint_path(
@@ -571,6 +570,8 @@ def model_scores_multiclass(y, y_hat, name = ''):
     f1score = f1_score(y,y_hat, average = 'macro')
     f1score_all = f1_score(y,y_hat, average = None)
     f1score_gap = max(f1score_all)- min(f1score_all)
+    prec = precision_score(y, y_hat, average = 'macro')
+    recall = recall_score(y, y_hat, average = 'macro')
     accuracy = accuracy_score(y, y_hat)
     print("F1-Score Macro = {}".format(round(f1score,5)))
     print("F1-Score Gap = {}".format(round(f1score_gap,5)))
@@ -588,55 +589,92 @@ def model_scores_multiclass(y, y_hat, name = ''):
       plt.title(name)
       save_fig(name)
     plt.show() 
-    return {'f1':f1score, 'f1_gap': f1score_gap, 'acc': accuracy}
+    return {'f1':f1score, 'f1_gap': f1score_gap, 'acc': accuracy, 'prec': prec, 'recall': recall}
+
+# Define our main tokenizer
+tokenizer = AutoTokenizer.from_pretrained("/home/adorni/polpo/alberto/tokenizer/models--m-polignano-uniba--bert_uncased_L-12_H-768_A-12_italian_alb3rt0/snapshots/4454cfbc82952da79729e33e81c37a72dc095b4b")
 
 use_cuda = torch.cuda.is_available()
 print(f"Is CUDA Available? {use_cuda}")
 
-# Loop over a variety of Parameters
-learning_rates = [5e-5, 3e-5]
-batch_size = [32, 64]
-parameters = list(itertools.product(learning_rates, batch_size))
+# 4. Train our models --------------------------------------------------------------------------------------------------
 
-# Initialize a list to store all our results
-pred_performance = {}
+if train_completed == False:
 
-# Loop and train a variety of BERT Models:
-for lr, batch in parameters:
-    print("-"*100)
-    print(f"\nTraining model with: learning rate: {lr}, batch size: {batch}\n")
-    print("-"*100)
+    # Remove index
+    train.reset_index(inplace = True, drop = True)
+    val.reset_index(inplace = True, drop = True)
+    test.reset_index(inplace = True, drop = True)
 
-    # Initialize the model
-    model = BertModule(learning_rate = lr, batch_size = batch)
-    # Fit the model
-    try:
-        model.load_from_best_checkpoint()
-        print("Model already trained")
-    except:  
-        print("Fitting new model")
-        model.fit()
+    # Define our datasets
+    train_dataset  = TopicDataset(tweets = train['tweet_text'], targets = train['topic'], tokenizer = tokenizer, max_len = 128)
+    val_dataset  = TopicDataset(tweets = val['tweet_text'], targets = val['topic'], tokenizer = tokenizer, max_len = 128)
+    test_dataset  = TopicDataset(tweets = test['tweet_text'], targets = test['topic'], tokenizer = tokenizer, max_len = 128)
 
-        # Now within the same parameter instance, load the model and get the performance over the test set
-        model.load_from_best_checkpoint()
+
+    # Loop over a variety of Parameters
+    learning_rates = [3e-5, 5e-5]
+    batch_size = [64, 32]
+
+    parameters = list(itertools.product(learning_rates, batch_size))
+
+
+    # Initialize a list to store all our results
+    pred_performance = {}
+
+    # Loop and train a variety of BERT Models:
+    for lr, batch in parameters:
+        print("-"*100)
+        print(f"\nTraining model with: learning rate: {lr}, batch size: {batch}\n")
+        print("-"*100)
+
+        # Initialize the model
+        model = BertModule(learning_rate = lr, batch_size = batch)
+        # Fit the model
+        try:
+            model.load_from_best_checkpoint()
+            print("Model already trained")
+        except:  
+            print("Fitting new model")
+            model.fit()
+
+            # Now within the same parameter instance, load the model and get the performance over the test set
+            model.load_from_best_checkpoint()
+            
         
-    
-    trainer_pred = Trainer()
-    pred = trainer_pred.predict(model, model.data.test_dataloader())
+        trainer_pred = Trainer()
+        pred = trainer_pred.predict(model, model.data.test_dataloader())
 
-    # First we flatten our list of tensors into a list of predictions
-    pred = [y_hat for tensor in pred for y_hat in tensor.tolist()]
-    # Then we transform it into a dataframe
-    pred = pd.DataFrame(pred, columns = ['topic_0', 'topic_1', 'topic_2'])
-    # Now we calculate the correct topic
-    pred['final_pred'] = pred.apply(lambda x: np.argmax(x), axis = 1)
-    # Now plot the performances of our model
-    pred_performance[f'lr_{str(lr)}_batch_{batch}'] = model_scores_multiclass(test.topic, pred.final_pred, name = f'BERT-Topic-lr={str(lr)}-batch={batch}')
-    # Delete the model to save memory
-    del model
-    torch.cuda.empty_cache() # PyTorch thing
+        # First we flatten our list of tensors into a list of predictions
+        pred = [y_hat for tensor in pred for y_hat in tensor.tolist()]
+        # Then we transform it into a dataframe
+        pred = pd.DataFrame(pred, columns = ['topic_0', 'topic_1', 'topic_2'])
+        # Now we calculate the correct topic
+        pred['final_pred'] = pred.apply(lambda x: np.argmax(x), axis = 1)
+        # Now plot the performances of our model
+        pred_performance[f'lr_{str(lr)}_batch_{batch}'] = model_scores_multiclass(test.topic, pred.final_pred, name = f'BERT-Topic-lr={str(lr)}-batch={batch}')
+        # Delete the model to save memory
+        del model
+        torch.cuda.empty_cache() # PyTorch thing
+    # Now save all the performances of our models
+    with open(f'{path_to_results}topic_performance.pkl', 'wb') as f:
+        pickle.dump(pred_performance, f)
 
+# 5. Predict over the whole Pre-Covid dataset --------------------------------------------------------------------------------------------------
 
-# Now save all the performances of our models
-with open(f'{path_to_results}topic_performance.pkl', 'wb') as f:
-    pickle.dump(pred_performance, f)
+# First we check what is the best model
+models = []
+f1 = []
+f1_gap = []
+acc = []
+prec = []
+recall = []
+
+for k,v in pred_performance.keys():
+    print(k)
+    models.append(k)
+    f1.append(v['f1'])
+    f1_gap.append(v['f1_gap'])
+    acc.append(v['acc'])
+    prec.append(v['prec'])
+    recall.append(v['recall'])
