@@ -11,9 +11,12 @@ try:
     comm = MPI.COMM_WORLD # initialize communications
     rank = comm.Get_rank()
     size = comm.Get_size()
+    mpi_use = True
 except:
     print("Not running on a cluster")
     rank = 0
+    size = 1
+    mpi_use = False
 
 import numpy as np
 import pandas as pd
@@ -90,6 +93,57 @@ def iterate_scraping(min_r, max_r, user_list, pool_n = 10000):
 print("Process - Rank: %d -----------------------------------------------------"%rank)
 
 if rank == 0:
+    # Load any previous list of scraped users
+    with open(f"{path_to_raw}scraped_users_union.pkl", "rb") as fp:   # Unpickling
+        scraped_users = pickle.load(fp)
+        try: 
+            scraped_users = scraped_users.tolist()
+        except:
+            print("")
+        print(len(scraped_users))
+    store = []
+    failed = []
+    check_merge = True
+    # Then try to load scraped datasets - if we find none of them, then we haven't iteratively scraped
+    try:
+        for i in range(0, size):
+            try:
+                scraped_i = pd.read_pickle(f'{path_to_raw}pre_covid_scrape_df_{i}.pkl.gz', compression='gzip')
+                store.append(scraped_i)
+            except:
+                print(f"Failed list: {i}")
+                failed.append(i)
+
+        if len(failed) == size:
+            check_merge = False
+    except:
+        print("No past scrape")
+        store = []
+        check_merge = False
+    try:
+        scraped_df = pd.read_pickle(f'{path_to_raw}pre_covid_scrape_df_union.pkl.gz', compression='gzip')
+        print(f"Past merged scrape exist: {scraped_df.shape[0]}")
+        print(f"Unique users: {scraped_df.scree_name.nunique()}")
+    except:
+        print("No past merged scrape")
+        scraped_df = pd.DataFrame()
+    store.append(scraped_df)
+    scraped_df = pd.concat(store)
+    del store
+    if check_merge:
+        scraped_df.drop_duplicates(inplace = True)
+        scraped_df.to_pickle(f'{path_to_raw}pre_covid_scrape_df_union.pkl.gz', compression='gzip')
+        scraped_users = scraped_users + scraped_df.scree_name.unique().tolist()
+        scraped_users = list(set(scraped_users))
+        print(len(scraped_users))
+        with open(f"{path_to_raw}scraped_users_union.pkl", "wb") as fp:   #Pickling
+            pickle.dump(scraped_users, fp)
+
+        # Now remove the single files to avoid cluttering
+        for i in range(0, size):
+            if os.path.exists(f'{path_to_raw}pre_covid_scrape_df_{i}.pkl.gz'): os.remove(f'{path_to_raw}pre_covid_scrape_df_{i}.pkl.gz')
+
+if rank == 0:
     try:
         with open(f'{path_to_raw}user_list.pkl', 'rb') as f: 
             user_list = pickle.load(f)
@@ -101,44 +155,43 @@ if rank == 0:
         user_list = post_df.scree_name.tolist()
         user_list = list(set(user_list))
         del post_df
+    with open(f'{path_to_repo}polpo_log.txt', 'w') as f:
+        f.write('trying scrape')
     # Add a check to see if the module is working
     for i,tweet in enumerate(sntwitter.TwitterSearchScraper('from:{} since:{} until:{}'.format("BattagliaInfo", "2020-04-01", "2020-05-01")).get_items()):
         if i>1:
             break
         print(tweet.id)
-    try:
+    check = [tweet]
+    
+    # We start from the users we already have
+    print(len(user_list))
+    user_list = list(set(user_list) - set(scraped_users))
+    print(len(user_list))
+    
+    with open(f'{path_to_repo}polpo_log.txt', 'w') as f:
+        f.write(f'scraped_tweets = missing users: {len(user_list)}')
+
+    if mpi_use:
         user_list = split_list(user_list)
-    except:
-        print("")
 else:
     user_list = None
 
 # Now we send our splitted list of proxies to our nodes
-try:
+if mpi_use:
     user_list = comm.scatter(user_list, root = 0)
-except:
-    print("")
 
 # SCRAPING --------------------------------------------------------------------------------------
 
-with open(f"{path_to_raw}scraped_users.pkl", "rb") as fp:   # Unpickling
-    scraped_users = pickle.load(fp)
-
-# PARAMETERS -----------------------------------------------------------------------------------------------------
+# PARAMETERS ###############
 
 start_date = '2020-01-01'
 end_date = '2020-02-29'
 
-try:
-    # We start from the users we already have
-    print(len(user_list))
-    user_list = list(set(user_list) - set(scraped_users.tolist()))
-    print(len(user_list))
-    minimum = 0
-    scraped_users = scraped_users.tolist()
-except:
-    minimum = 0 # beginning of our list
+# Initialize an empty dataset
+scraped_df = pd.DataFrame()
 
+minimum = 0
 maximum = len(user_list) # end of our list
 steps = 1000 # how many urls per batch
 range_list = list(np.arange(minimum,maximum,steps))
@@ -146,7 +199,8 @@ range_list = list(np.arange(minimum,maximum,steps))
 iter_count = 0
 
 tweet_list_scraped = []
-scraped_df = pd.DataFrame()
+missing_users = []
+
 for i in range(len(range_list)):
     min_r = range_list[i]
     try: 
@@ -156,10 +210,9 @@ for i in range(len(range_list)):
     print("Range: {} to {}".format(min_r, max_r))
     batch_list = iterate_scraping(min_r, max_r, user_list, pool_n = 100) # our iterating thread pool to request urls
     tweet_list_scraped.append(batch_list) # we merge the results we already have with the ones of the current batch
-    scraped_users = scraped_users + user_list[min_r:max_r] # Iteratively add the new scraped users
     print("Batch ended")
     iter_count += steps
-    if iter_count % 20000 == 0 or max_r == maximum:
+    if iter_count % 2000 == 0 or max_r == maximum:
         # We first flatten out our list of tweets
         flat_list = [t for sublist in tweet_list_scraped for item in sublist for t in item]
         # In case we have only errors, add a fake tweet
@@ -172,7 +225,49 @@ for i in range(len(range_list)):
         scraped_df.reset_index(inplace = True, drop = True)
         scraped_df.to_pickle(f'{path_to_raw}pre_covid_scrape_df_{rank}.pkl.gz', compression='gzip')
         print(f"Output Saved - {min_r} to {max_r} out of {maximum}")
+        print(f"N. of rows: {scraped_df.shape}")
+        # Get what users we are missing from our batches
+        missing_users = missing_users + list(set(user_list) - set(scraped_df.scree_name.unique().tolist()))
 
-        # Then add the scraped users we have done with the ones we have already did
-        with open(f"{path_to_raw}scraped_users{rank}.pkl", "wb") as fp:   #Pickling
-            pickle.dump(scraped_users, fp)
+len_miss = len(missing_users)
+
+while len_miss > 1000:
+
+    maximum = len(missing_users) # end of our list
+    steps = 1000 # how many urls per batch
+    range_list = list(np.arange(minimum,maximum,steps))
+
+    iter_count = 0
+
+    tweet_list_scraped = []
+    missing = []
+
+    for i in range(len(range_list)):
+        min_r = range_list[i]
+        try: 
+            max_r = range_list[i+1]
+        except: 
+            max_r = maximum # if we are out of range we use the list up to its maximum
+        print("Range: {} to {}".format(min_r, max_r))
+        batch_list = iterate_scraping(min_r, max_r, missing_users, pool_n = 100) # our iterating thread pool to request urls
+        tweet_list_scraped.append(batch_list) # we merge the results we already have with the ones of the current batch
+        print("Batch ended")
+        iter_count += steps
+        if iter_count % 2000 == 0 or max_r == maximum:
+            # We first flatten out our list of tweets
+            flat_list = [t for sublist in tweet_list_scraped for item in sublist for t in item]
+            # In case we have only errors, add a fake tweet
+            flat_list.append([0, "-", "-", "-", "-", "-"])
+            # Creating a dataframe from the tweets list above 
+            new_batch = pd.DataFrame(flat_list, columns=['tweet_ids', 'tweet_text', 'locations', 'dates', 'scree_name', 'user_id'])
+            # drop errors
+            new_batch = new_batch.loc[(new_batch.tweet_ids != 'Error')&(new_batch.tweet_ids != 0)]
+            scraped_df = pd.concat([scraped_df, new_batch])
+            scraped_df.reset_index(inplace = True, drop = True)
+            scraped_df.to_pickle(f'{path_to_raw}pre_covid_scrape_df_{rank}.pkl.gz', compression='gzip')
+            print(f"Output Saved - {min_r} to {max_r} out of {maximum}")
+            print(f"N. of rows: {scraped_df.shape}")
+            # Get what users we are missing from our batches
+            missing = missing + list(set(missing_users) - set(scraped_df.scree_name.unique().tolist()))
+    len_miss = len(missing)
+    missing_users = missing.copy()
