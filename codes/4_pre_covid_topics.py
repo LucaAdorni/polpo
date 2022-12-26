@@ -87,56 +87,46 @@ os.makedirs(path_to_models_top, exist_ok = True)
 print("Process - Rank: %d -----------------------------------------------------"%rank)
 
 try:
-    # Now load all the performances of our models
-    with open(f'{path_to_results}topic_performance.pkl', 'rb') as f:
-        pred_performance = pickle.load(f)
-    # If we can load it, we have already trained our models
-    train_completed = True
+    train = pd.read_pickle(f"{path_to_topic}train.pkl.gz", compression = 'gzip')
+    val = pd.read_pickle(f"{path_to_topic}val.pkl.gz", compression = 'gzip')
+    test = pd.read_pickle(f"{path_to_topic}test.pkl.gz", compression = 'gzip')
 except:
-    train_completed = False
 
-if train_completed == False:
-    try:
-        train = pd.read_pickle(f"{path_to_topic}train.pkl.gz", compression = 'gzip')
-        val = pd.read_pickle(f"{path_to_topic}val.pkl.gz", compression = 'gzip')
-        test = pd.read_pickle(f"{path_to_topic}test.pkl.gz", compression = 'gzip')
-    except:
+    # Import our original dataset
+    post_df = pd.read_csv(f'{path_to_raw}tweets_without_duplicates_regions_sentiment_demographics_topic_emotion.csv')
+    # Drop columns we do not need
+    post_df = post_df[['tweet_text', 'topic']]
 
-        # Import our original dataset
-        post_df = pd.read_csv(f'{path_to_raw}tweets_without_duplicates_regions_sentiment_demographics_topic_emotion.csv')
-        # Drop columns we do not need
-        post_df = post_df[['tweet_text', 'topic']]
+    # PARAMETERS
+    unused_size = 0.995
+    test_size = 0.1
+    val_size = 0.1
+    train_size = 1 - test_size - val_size
+    tag_size = '_02'
+    random_seed = 42
+    random.seed(random_seed)
 
-        # PARAMETERS
-        unused_size = 0.995
-        test_size = 0.1
-        val_size = 0.1
-        train_size = 1 - test_size - val_size
-        tag_size = '_02'
-        random_seed = 42
-        random.seed(random_seed)
+    # Perform split into train and test
+    train, _ = train_test_split(post_df, test_size = unused_size, random_state = random_seed, stratify = post_df.topic)
+    train, test = train_test_split(train, test_size = test_size, random_state = random_seed, stratify = train.topic)
+    train, val = train_test_split(train, test_size = val_size, random_state = random_seed, stratify = train.topic)
 
-        # Perform split into train and test
-        train, _ = train_test_split(post_df, test_size = unused_size, random_state = random_seed, stratify = post_df.topic)
-        train, test = train_test_split(train, test_size = test_size, random_state = random_seed, stratify = train.topic)
-        train, val = train_test_split(train, test_size = val_size, random_state = random_seed, stratify = train.topic)
+    # Print dataset shapes
+    print(f'Training Set: {train.shape}')
+    print(f'Validation Set: {val.shape}')
+    print(f'Test Set: {test.shape}')
 
-        # Print dataset shapes
-        print(f'Training Set: {train.shape}')
-        print(f'Validation Set: {val.shape}')
-        print(f'Test Set: {test.shape}')
+    # save the file
+    train.to_pickle(f"{path_to_topic}train.pkl.gz", compression = 'gzip')
+    val.to_pickle(f"{path_to_topic}val.pkl.gz", compression = 'gzip')
+    test.to_pickle(f"{path_to_topic}test.pkl.gz", compression = 'gzip')
+    print("Dataframes successfully saved")
 
-        # save the file
-        train.to_pickle(f"{path_to_topic}train.pkl.gz", compression = 'gzip')
-        val.to_pickle(f"{path_to_topic}val.pkl.gz", compression = 'gzip')
-        test.to_pickle(f"{path_to_topic}test.pkl.gz", compression = 'gzip')
-        print("Dataframes successfully saved")
-
-    # Transform our topics into labels
-    train.topic.replace({'economics': 1, 'politics': 2, 'art and entertainment': 0, 'health': 0, 'vaccine': 0, 'none': 0}, inplace = True)
-    val.topic.replace({'economics': 1, 'politics': 2, 'art and entertainment': 0, 'health': 0, 'vaccine': 0, 'none': 0}, inplace = True)
-    test.topic.replace({'economics': 1, 'politics': 2, 'art and entertainment': 0, 'health': 0, 'vaccine': 0, 'none': 0}, inplace = True)
-    print(f"\nNumber of classes: {train.topic.nunique()}")
+# Transform our topics into labels
+train.topic.replace({'economics': 1, 'politics': 2, 'art and entertainment': 0, 'health': 0, 'vaccine': 0, 'none': 0}, inplace = True)
+val.topic.replace({'economics': 1, 'politics': 2, 'art and entertainment': 0, 'health': 0, 'vaccine': 0, 'none': 0}, inplace = True)
+test.topic.replace({'economics': 1, 'politics': 2, 'art and entertainment': 0, 'health': 0, 'vaccine': 0, 'none': 0}, inplace = True)
+print(f"\nNumber of classes: {train.topic.nunique()}")
 
 
 # 3. Define our BERT Module --------------------------------------------------------------------------------------------------
@@ -187,10 +177,11 @@ def get_best_checkpoint_path(
       file_format: str = ".ckpt",
   ) -> str:    
   
+  main_dir = f"{path_to_models_top}lr{learning_rate}_batch{batch_size}/"
   checkpoints = [
-      PurePosixPath(f"{path_to_models_top}{el}")
-      for el in os.listdir(path_to_models_top)
-      if os.path.isfile(path = PurePosixPath(f"{path_to_models_top}{el}")) and PurePosixPath(f"{path_to_models_top}{el}").suffix == ".ckpt" and f"batch={batch_size}-lr={str(learning_rate)}" in PurePosixPath(f"{path_to_models_top}{el}").stem
+      PurePosixPath(f"{main_dir}{el}")
+      for el in os.listdir(main_dir)
+      if os.path.isfile(path = PurePosixPath(f"{main_dir}{el}")) and PurePosixPath(f"{main_dir}{el}").suffix == ".ckpt" and f"batch={batch_size}-lr={str(learning_rate)}" in PurePosixPath(f"{main_dir}{el}").stem
   ]
   path_score = {
       str(path): float(path.stem.split("=")[-1])
@@ -269,10 +260,12 @@ class BertModule(pl.LightningModule):
         self._add_model_specific_hparams()
         self._add_default_hparams()
         self._set_seed(self.hparams.random_seed)
+        # Adjust the output path
+        self.hparams.output_path = f"{path_to_models_top}lr{self.hparams.learning_rate}_batch{self.hparams.batch_size}/"
+        os.makedirs(self.hparams.output_path, exist_ok = True)
         
         self.num_labels = num_labels
-
-                
+   
         config = AutoConfig.from_pretrained(path_to_alberto)
         self.bert = AutoModel.from_pretrained(path_to_alberto)
         
@@ -488,7 +481,7 @@ class BertModule(pl.LightningModule):
         lr_monitor = LearningRateMonitor(logging_interval="epoch")
 
         callbacks = [
-            backup_callback,
+            # backup_callback,
             checkpoint_callback,
             early_stop_callback,
             lr_monitor
@@ -506,6 +499,10 @@ class BertModule(pl.LightningModule):
 
         return trainer_params
 
+    def get_best_path(self, **kwargs) -> pl.LightningModule:
+        best_checkpoint_path, _ = get_best_checkpoint_path(self.hparams.batch_size, self.hparams.learning_rate, model_class=self, **kwargs)
+        return best_checkpoint_path
+
     def load_from_best_checkpoint(self, **kwargs) -> pl.LightningModule:
         best_checkpoint_path, _ = get_best_checkpoint_path(self.hparams.batch_size, self.hparams.learning_rate, model_class=self, **kwargs)
         print(best_checkpoint_path)
@@ -518,13 +515,13 @@ class BertModule(pl.LightningModule):
             "shuffle_train_dataset": True,
             "batch_size": 32,
             "loader_workers": 0,
-            "output_path": path_to_models_top,
+            "output_path": f"{path_to_models_top}",
             # Trainer params
             "verbose": True,
             "accumulate_grad_batches": 1,
             "accelerator": 'gpu',
             "devices": 1,
-            "max_epochs": 7,
+            "max_epochs": 10,
             # Callback params
             "checkpoint_monitor": "avg_val_loss",
             "checkpoint_monitor_mode": "min",
@@ -599,49 +596,54 @@ print(f"Is CUDA Available? {use_cuda}")
 
 # 4. Train our models --------------------------------------------------------------------------------------------------
 
-if train_completed == False:
+# Remove index
+train.reset_index(inplace = True, drop = True)
+val.reset_index(inplace = True, drop = True)
+test.reset_index(inplace = True, drop = True)
 
-    # Remove index
-    train.reset_index(inplace = True, drop = True)
-    val.reset_index(inplace = True, drop = True)
-    test.reset_index(inplace = True, drop = True)
-
-    # Define our datasets
-    train_dataset  = TopicDataset(tweets = train['tweet_text'], targets = train['topic'], tokenizer = tokenizer, max_len = 128)
-    val_dataset  = TopicDataset(tweets = val['tweet_text'], targets = val['topic'], tokenizer = tokenizer, max_len = 128)
-    test_dataset  = TopicDataset(tweets = test['tweet_text'], targets = test['topic'], tokenizer = tokenizer, max_len = 128)
+# Define our datasets
+train_dataset  = TopicDataset(tweets = train['tweet_text'], targets = train['topic'], tokenizer = tokenizer, max_len = 128)
+val_dataset  = TopicDataset(tweets = val['tweet_text'], targets = val['topic'], tokenizer = tokenizer, max_len = 128)
+test_dataset  = TopicDataset(tweets = test['tweet_text'], targets = test['topic'], tokenizer = tokenizer, max_len = 128)
 
 
-    # Loop over a variety of Parameters
-    learning_rates = [3e-5, 5e-5]
-    batch_size = [64, 32]
+# Loop over a variety of Parameters
+learning_rates = [3e-5, 5e-5]
+batch_size = [64, 32]
 
-    parameters = list(itertools.product(learning_rates, batch_size))
+parameters = list(itertools.product(learning_rates, batch_size))
 
-
-    # Initialize a list to store all our results
+# Initialize a list to store all our results
+try:
+    with open(f'{path_to_results}topic_performance.pkl', "rb") as fp:   # Unpickling
+        pred_performance = pickle.load(fp)
+        print("Loaded pre-existing results")
+except:
     pred_performance = {}
 
-    # Loop and train a variety of BERT Models:
-    for lr, batch in parameters:
+# Loop and train a variety of BERT Models:
+for lr, batch in parameters:
+    if f'lr_{str(lr)}_batch_{batch}' in pred_performance:
+        continue
+    else:
         print("-"*100)
         print(f"\nTraining model with: learning rate: {lr}, batch size: {batch}\n")
         print("-"*100)
-
-        # Initialize the model
-        model = BertModule(learning_rate = lr, batch_size = batch)
         # Fit the model
         try:
-            model.load_from_best_checkpoint()
+            # Initialize the model
+            path = get_best_checkpoint_path(batch_size = batch, learning_rate = lr)[0]
             print("Model already trained")
         except:  
+            model = BertModule(learning_rate = lr, already_trained = False, batch_size = batch)
             print("Fitting new model")
             model.fit()
-
             # Now within the same parameter instance, load the model and get the performance over the test set
-            model.load_from_best_checkpoint()
-            
-        
+            del model
+            path = get_best_checkpoint_path(batch_size = batch, learning_rate = lr)[0]
+
+        # Load from the best path
+        model = BertModule.load_from_checkpoint(f"{path}")
         trainer_pred = Trainer()
         pred = trainer_pred.predict(model, model.data.test_dataloader())
 
@@ -670,11 +672,15 @@ acc = []
 prec = []
 recall = []
 
-for k,v in pred_performance.keys():
+for k,v in pred_performance.items():
     print(k)
+    print(v)
     models.append(k)
     f1.append(v['f1'])
     f1_gap.append(v['f1_gap'])
     acc.append(v['acc'])
     prec.append(v['prec'])
     recall.append(v['recall'])
+
+pred_performance
+np.argmax(f1)
