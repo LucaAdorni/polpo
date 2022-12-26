@@ -51,16 +51,50 @@ except:
 # 2. Loop and read all the pre-scraping files -------------------------------------------------
 
 # First step will be to read the raw scraped files
-for rank in range(0,10):
-    print(rank)
-    pre_df = pd.read_pickle(f'{path_to_raw}pre_covid_scrape_df_{rank}.pkl.gz', compression='gzip')
+size = 50
+store = []
+failed = []
+check_merge = True
+# Then try to load scraped datasets - if we find none of them, then we haven't iteratively scraped
+try:
+    for i in range(0, size):
+        try:
+            scraped_i = pd.read_pickle(f'{path_to_raw}pre_covid_scrape_df_{i}.pkl.gz', compression='gzip')
+            store.append(scraped_i)
+        except:
+            print(f"Failed list: {i}")
+            failed.append(i)
 
-    # find all urls within the tweets, gives back a list
-    pre_df["url"] = pre_df.tweet_text.apply(lambda x: re.findall("(?P<url>https?://[^\s]+)", x))
+    if len(failed) == size:
+        check_merge = False
+except:
+    print("No past scrape")
+    store = []
+    check_merge = False
+try:
+    scraped_df = pd.read_pickle(f'{path_to_raw}pre_covid_scrape_df_union.pkl.gz', compression='gzip')
+    print(f"Past merged scrape exist: {scraped_df.shape[0]}")
+    print(f"Unique users: {scraped_df.scree_name.nunique()}")
+except:
+    print("No past merged scrape")
+    scraped_df = pd.DataFrame()
+store.append(scraped_df)
+scraped_df = pd.concat(store)
+del store
+if check_merge:
+    scraped_df.drop_duplicates(inplace = True)
+    scraped_df.to_pickle(f'{path_to_raw}pre_covid_scrape_df_union.pkl.gz', compression='gzip')
+    # Now remove the single files to avoid cluttering
+    for i in range(0, size):
+        if os.path.exists(f'{path_to_raw}pre_covid_scrape_df_{i}.pkl.gz'): os.remove(f'{path_to_raw}pre_covid_scrape_df_{i}.pkl.gz')
 
-    # Transform it to a set of unique URLs
-    url_list = url_list + [url for urls in pre_df.url.tolist() for url in urls]
-    url_list = list(set(url_list))
+
+# find all urls within the tweets, gives back a list
+scraped_df["url"] = scraped_df.tweet_text.apply(lambda x: re.findall("(?P<url>https?://[^\s]+)", x))
+
+# Transform it to a set of unique URLs
+url_list = url_list + [url for urls in scraped_df.url.tolist() for url in urls]
+url_list = list(set(url_list))
 
 with open(f'{path_to_links}url_list.pkl', 'wb') as f: 
     pickle.dump(url_list, f)

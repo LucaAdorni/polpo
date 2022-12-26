@@ -7,11 +7,17 @@
 # 0. Setup -------------------------------------------------
 
 #!/usr/bin/env python
-from mpi4py import MPI
-
-comm = MPI.COMM_WORLD # initialize communications
-rank = comm.Get_rank()
-size = comm.Get_size()
+try:
+    from mpi4py import MPI
+    comm = MPI.COMM_WORLD # initialize communications
+    rank = comm.Get_rank()
+    size = comm.Get_size()
+    mpi_use = True
+except:
+    print("Not running on a cluster")
+    rank = 0
+    size = 1
+    mpi_use = False
 
 # 1. Imports -------------------------------------------------
 
@@ -31,12 +37,18 @@ from urllib.request import Request, urlopen
 #from fake_useragent import UserAgent
 import random
 from bs4 import BeautifulSoup
-from IPython.core.display import clear_output
 import requests
 from urllib3.util.retry import Retry
 from urllib3.exceptions import MaxRetryError, ProxySchemeUnknown, ProtocolError
 
-path_to_repo = f"{os.getcwd()}/links/"
+try:
+    # Setup Repository
+    with open("repo_info.txt", "r") as repo_info:
+        path_to_repo = repo_info.readline()
+except:
+    path_to_repo = f"{os.getcwd()}/polpo/"
+    sys.path.append(f"{os.getcwd()}/.local/bin") # import the temporary path where the server installed the module
+
 path_to_data = f"{path_to_repo}data/"
 path_to_links = f"{path_to_data}links/"
 
@@ -166,51 +178,98 @@ print("Process - Rank: %d -----------------------------------------------------"
 # Only one node will scrape the proxy list
 if rank == 0:
     proxies = get_proxies()
-    proxies = proxies
-    proxies = split_list(proxies)
+    if mpi_use:
+        proxies = proxies
+        proxies = split_list(proxies)
 else:
     proxies = None
 
 # Now we send our splitted list of proxies to our nodes
-proxies = comm.scatter(proxies, root = 0)
+if mpi_use:
+    proxies = comm.scatter(proxies, root = 0)
 
 working_proxies = check_proxy_list(proxies)
 
-working_proxies = comm.gather(working_proxies, root = 0)
+if mpi_use:
+    working_proxies = comm.gather(working_proxies, root = 0)
 
-if rank == 0:
+if rank == 0 and mpi_use == True:
     working_proxies = [link for sub_list in working_proxies for link in sub_list]
     # now we broadcast the final list to everyone
 
-working_proxies = comm.bcast(working_proxies, root=0)
+if mpi_use:
+    working_proxies = comm.bcast(working_proxies, root=0)
 
 print(f'Received Working list: {len(working_proxies)}')
 
 # 3. STEP B: Load URL List -------------------------------------------------
 
+# Only the first machine does that
 if rank == 0:
-    print("Loading the URL lists")
-    # Import all URLs we need to unshorten
-    with open(f'{path_to_links}url_list.pkl', 'rb') as f: 
-        url_list = pickle.load(f)
-        print(f"URLs in dataset: {len(url_list)}")
-    # Import the dictionary of already unshortened URLs
+    failed = []
+    store = {}
+    # To ease computation, we have split our URLs into n-size lists/dictionaries (one per machine)
+    # Iteratively load all of them
     try:
-        with open(f'{path_to_links}url_dictionary.pkl', 'rb') as f: 
-            url_dict = pickle.load(f)
-        print("URL dictionary loaded")
+        for i in range(0, size):
+            try:
+                with open(f'{path_to_links}url_dictionary_{rank}.pkl', 'rb') as f: 
+                    url_dict_i = pickle.load(f)
+                store = {**store, **url_dict_i}
+            except:
+                print(f"Failed list: {i}")
+                failed.append(i)
+        # If we have none of them (or some error occurred) - signal that we do not have them
+        if len(failed) == size:
+            check_merge = False
     except:
-        url_dict = {}
-        print("New URL dictionary initiated")
-    # Now remove all the URLs we have already unshortened
-    url_list = [url for url in url_list if url not in url_dict.keys()]
-    print(f"URLs to be unshortened: {len(url_list)}")
-    url_list = split_list(url_list)
-else:
-    url_list = None
+        print("No past scrape")
+        store = {}
+        check_merge = False
+    # If we have pre-existing URL-dictionaries for each CPU, need to merge with previous results
+    # And then re-create new lists of TO-DO URLs
+    if check_merge:
+        # Load (if it exist) the previous dictionary of unshortened URLs
+        try:
+            with open(f'{path_to_links}url_dictionary.pkl', 'rb') as f: 
+                url_dict = pickle.load(f)
+            print("URL dictionary loaded")
+        except:
+            url_dict = {}
+            print("New URL dictionary initiated")
+        print(f"Pre-existing unshortened list of URLs length: {len(url_dict)}")
+        # If we have some new scrape, merge it with the previous
+        print(len(store))
+        url_dict = {**store, **url_dict}
+        del store
+        print(len(url_dict))
+        with open(f'{path_to_links}url_dictionary.pkl', 'wb') as f: 
+                pickle.dump(url_dict, f)
+                print("saved dictionary")
+            
+        # Now remove all those previous lists/dictionaries
+        for i in range(0, size):
+            if os.path.exists(f'{path_to_links}url_dictionary_{i}.pkl'): os.remove(f'{path_to_links}url_dictionary_{i}.pkl')
+            if os.path.exists(f'{path_to_links}url_list_{i}.pkl'): os.remove(f'{path_to_links}url_list_{i}.pkl')
+        # Check which URLs we still need to unshorten
+        print("Loading the URL lists")
+        # Import all URLs we need to unshorten
+        with open(f'{path_to_links}url_list.pkl', 'rb') as f: 
+            url_list = pickle.load(f)
+            print(f"URLs in dataset: {len(url_list)}")
+        # Check what links we are missing
+        url_list = [url for url in url_list if url not in url_dict.keys()]
+        url_list = split_list(url_list)
+        for i in range(0,size):
+            with open(f'{path_to_links}url_list_{i}.pkl', 'wb') as f: 
+                pickle.dump(url_list[i], f)
+        del url_list, url_dict
 
-# Now we send our splitted list of proxies to our nodes
-url_list = comm.scatter(url_list, root = 0)
+
+# Import all URLs we need to unshorten
+with open(f'{path_to_links}url_list_{rank}.pkl', 'rb') as f: 
+    url_list = pickle.load(f)
+    print(f"URLs in dataset: {len(url_list)}")
 
 # PARAMETERS
 minimum = 0 # beginning of our list
@@ -221,8 +280,8 @@ range_list = list(np.arange(minimum,maximum,steps))
 iter_count = 0
 
 url_proc = {}
-# signal.signal(signal.SIGINT, signal_handler)
 for i in range(len(range_list)):
+    print(i)
     min_r = range_list[i]
     try: 
         max_r = range_list[i+1]
@@ -231,16 +290,7 @@ for i in range(len(range_list)):
     batch_dict = iterate_pool(min_r, max_r, url_list, pool_n = steps) # our iterating thread pool to request urls
     url_proc = {**url_proc, **batch_dict} # we merge the results we already have with the ones of the current batch
     iter_count += steps
-url_proc = comm.gather(url_proc, root = 0)
-
-if rank == 0:
-    url_proc = {k: v for d in url_proc for k, v in d.items()}
-    url_proc = {**url_proc, **url_dict}
-    print("")
-    print(len(url_proc))
-    with open(f'{path_to_links}url_dictionary.pkl', 'wb') as f: 
-        pickle.dump(url_proc, f)
-
-del url_proc, url_list
-
-exit()
+    if iter_count % 2000 == 0 or max_r == maximum:
+        with open(f'{path_to_links}url_dictionary_{rank}.pkl', 'wb') as f: 
+            pickle.dump(url_proc, f)
+            print("saved dictionary")
