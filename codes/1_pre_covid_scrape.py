@@ -135,6 +135,7 @@ if rank == 0:
         scraped_df.to_pickle(f'{path_to_raw}pre_covid_scrape_df_union.pkl.gz', compression='gzip')
         scraped_users = scraped_users + scraped_df.scree_name.unique().tolist()
         scraped_users = list(set(scraped_users))
+        del scraped_df
         print(len(scraped_users))
         with open(f"{path_to_raw}scraped_users_union.pkl", "wb") as fp:   #Pickling
             pickle.dump(scraped_users, fp)
@@ -157,18 +158,12 @@ if rank == 0:
         del post_df
     with open(f'{path_to_repo}polpo_log.txt', 'w') as f:
         f.write('trying scrape')
-    # Add a check to see if the module is working
-    for i,tweet in enumerate(sntwitter.TwitterSearchScraper('from:{} since:{} until:{}'.format("BattagliaInfo", "2020-04-01", "2020-05-01")).get_items()):
-        if i>1:
-            break
-        print(tweet.id)
-    check = [tweet]
     
     # We start from the users we already have
     print(len(user_list))
     user_list = list(set(user_list) - set(scraped_users))
     print(len(user_list))
-    
+    del scrape_users
     with open(f'{path_to_repo}polpo_log.txt', 'w') as f:
         f.write(f'scraped_tweets = missing users: {len(user_list)}')
 
@@ -212,7 +207,7 @@ for i in range(len(range_list)):
     tweet_list_scraped.append(batch_list) # we merge the results we already have with the ones of the current batch
     print("Batch ended")
     iter_count += steps
-    if iter_count % 2000 == 0 or max_r == maximum:
+    if iter_count % 4000 == 0 or max_r == maximum:
         # We first flatten out our list of tweets
         flat_list = [t for sublist in tweet_list_scraped for item in sublist for t in item]
         # In case we have only errors, add a fake tweet
@@ -253,7 +248,7 @@ while len_miss > 1000:
         tweet_list_scraped.append(batch_list) # we merge the results we already have with the ones of the current batch
         print("Batch ended")
         iter_count += steps
-        if iter_count % 2000 == 0 or max_r == maximum:
+        if iter_count % 4000 == 0 or max_r == maximum:
             # We first flatten out our list of tweets
             flat_list = [t for sublist in tweet_list_scraped for item in sublist for t in item]
             # In case we have only errors, add a fake tweet
