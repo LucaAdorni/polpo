@@ -13,4 +13,4 @@ module load pytorch/1.2
 
 source activate polpo
 
-python ./polpo/codes/2_pre_covid_topics.py
+python ./polpo/codes/4_pre_covid_topics.py
