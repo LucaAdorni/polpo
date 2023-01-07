@@ -90,29 +90,3 @@ for i in range(0,size):
     batch = scraped_df.iloc[minimum:maximum]
     batch.to_pickle(f'{path_to_raw}batches/batch_{i}.pkl.gz', compression='gzip')
     minimum += step
-
-size = 250
-completed = []
-tbd = []
-failed = []
-
-for i in range(0,size):
-    # Load the old dataset
-    try:
-        batch = pd.read_pickle(f'{path_to_raw}batches/batch_{i}.pkl.gz', compression = 'gzip')
-        if "final_pred" in batch.columns:
-            print(f"Batch {i} ok")
-            completed.append(batch)
-        else:
-            tbd.append(batch)
-    except:
-        failed.append(i)
-
-assert (len(tbd)) == 0
-
-completed = pd.concat(completed)
-completed.to_pickle(f"{path_to_data}processed/pre_df5.pkl.gz", compression = 'gzip')
-
-# # # Remove the single batches
-for i in range(0, size):
-    if os.path.exists(f'{path_to_raw}batches/batch_{i}.pkl.gz'): os.remove(f'{path_to_raw}batches/batch_{i}.pkl.gz')
