@@ -213,7 +213,7 @@ if rank == 0:
     try:
         for i in range(0, size):
             try:
-                with open(f'{path_to_links}url_dictionary_{rank}.pkl', 'rb') as f: 
+                with open(f'{path_to_links}url_dictionary_{i}.pkl', 'rb') as f: 
                     url_dict_i = pickle.load(f)
                 store = {**store, **url_dict_i}
             except:
