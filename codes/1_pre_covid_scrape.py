@@ -62,7 +62,7 @@ def scrape_users(username):
     # Using TwitterSearchScraper to scrape data and append tweets to list
     try:
         for i,tweet in enumerate(sntwitter.TwitterSearchScraper('from:{} since:{} until:{}'.format(username, start_date, end_date)).get_items()):
-            if i>1000:
+            if i>500:
                 break
             tweet_list.append([tweet.id, tweet.content, tweet.user.location, tweet.date, tweet.user.username, tweet.user.id])
     except:
