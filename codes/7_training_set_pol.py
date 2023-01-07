@@ -10,14 +10,10 @@ import numpy as np
 import pandas as pd
 import os
 import re
-import dill
 import pickle
-from tqdm import tqdm
 import sys
 import tldextract
 from collections import Counter
-
-tqdm.pandas()
 
 pd.options.display.max_columns = 200
 pd.options.display.max_rows = 1000
@@ -53,51 +49,54 @@ failed = []
 store = {}
 # To ease computation, we have split our URLs into n-size lists/dictionaries (one per machine)
 # Iteratively load all of them
-try:
-    for i in range(0, size):
-        try:
-            with open(f'{path_to_links}url_dictionary_{i}.pkl', 'rb') as f: 
-                url_dict_i = pickle.load(f)
-            store = {**store, **url_dict_i}
-        except:
-            print(f"Failed list: {i}")
-            failed.append(i)
-    # If we have none of them (or some error occurred) - signal that we do not have them
-    if len(failed) == size:
-        check_merge = False
-    else:
-        check_merge = True
-except:
-    print("No past scrape")
-    store = {}
-    check_merge = False
-# If we have pre-existing URL-dictionaries for each CPU, need to merge with previous results
-# And then re-create new lists of TO-DO URLs
-if check_merge:
-    # Load (if it exist) the previous dictionary of unshortened URLs
-    try:
-        with open(f'{path_to_links}url_dictionary.pkl', 'rb') as f: 
-            url_dict = pickle.load(f)
-        print("URL dictionary loaded")
-    except:
-        url_dict = {}
-        print("New URL dictionary initiated")
-    print(f"Pre-existing unshortened list of URLs length: {len(url_dict)}")
-    # If we have some new scrape, merge it with the previous
-    print(len(store))
-    url_dict = {**store, **url_dict}
-    del store
-    print(len(url_dict))
-    with open(f'{path_to_links}url_dictionary.pkl', 'wb') as f: 
-            pickle.dump(url_dict, f)
-            print("saved dictionary")
+# try:
+#     for i in range(0, size):
+#         try:
+#             with open(f'{path_to_links}url_dictionary_{i}.pkl', 'rb') as f: 
+#                 url_dict_i = pickle.load(f)
+#             store = {**store, **url_dict_i}
+#         except:
+#             print(f"Failed list: {i}")
+#             failed.append(i)
+#     # If we have none of them (or some error occurred) - signal that we do not have them
+#     if len(failed) == size:
+#         check_merge = False
+#     else:
+#         check_merge = True
+# except:
+#     print("No past scrape")
+#     store = {}
+#     check_merge = False
+# # If we have pre-existing URL-dictionaries for each CPU, need to merge with previous results
+# # And then re-create new lists of TO-DO URLs
+# if check_merge:
+#     # Load (if it exist) the previous dictionary of unshortened URLs
+#     try:
+#         with open(f'{path_to_links}url_dictionary.pkl', 'rb') as f: 
+#             url_dict = pickle.load(f)
+#         print("URL dictionary loaded")
+#     except:
+#         url_dict = {}
+#         print("New URL dictionary initiated")
+#     print(f"Pre-existing unshortened list of URLs length: {len(url_dict)}")
+#     # If we have some new scrape, merge it with the previous
+#     print(len(store))
+#     url_dict = {**store, **url_dict}
+#     del store
+#     print(len(url_dict))
+#     with open(f'{path_to_links}url_dictionary.pkl', 'wb') as f: 
+#             pickle.dump(url_dict, f)
+#             print("saved dictionary")
         
-    # Now remove all those previous lists/dictionaries
-    for i in range(0, size):
-        if os.path.exists(f'{path_to_links}url_dictionary_{i}.pkl'): os.remove(f'{path_to_links}url_dictionary_{i}.pkl')
-        if os.path.exists(f'{path_to_links}url_list_{i}.pkl'): os.remove(f'{path_to_links}url_list_{i}.pkl')
-    # Check which URLs we still need to unshorten
-    print("Loading the URL lists")
+#     # Now remove all those previous lists/dictionaries
+#     for i in range(0, size):
+#         if os.path.exists(f'{path_to_links}url_dictionary_{i}.pkl'): os.remove(f'{path_to_links}url_dictionary_{i}.pkl')
+#         if os.path.exists(f'{path_to_links}url_list_{i}.pkl'): os.remove(f'{path_to_links}url_list_{i}.pkl')
+#     # Check which URLs we still need to unshorten
+#     print("Loading the URL lists")
+
+with open(f'{path_to_links}url_dictionary.pkl', 'rb') as f: 
+    url_dict = pickle.load(f)
 
 # 2. Define the functions to compute polarization -------------------------------------------------
 
@@ -107,7 +106,7 @@ def find_urls(df):
     """
     Function to iteratively find all URLs within tweets
     """
-    df["url"] = df.tweet_text.progress_apply(lambda x: re.findall("(?P<url>https?://[^\s]+)", x))
+    df["url"] = df.tweet_text.apply(lambda x: re.findall("(?P<url>https?://[^\s]+)", x))
 
 def find_full_link(df):
     """
@@ -126,7 +125,7 @@ def find_full_link(df):
             try: x.full_url.append(results[url]) # append the results
             except: next
 
-    df.progress_apply(lambda x: iterate_full_link(x, url_dict), axis = 1)
+    df.apply(lambda x: iterate_full_link(x, url_dict), axis = 1)
     # Drop the URL column since we do not need it anymore
     df.drop(columns = 'url', inplace = True)
 
@@ -154,7 +153,7 @@ def extract_domains(df):
             try: x.domain.append(extract(url)) # append the results
             except: next
 
-    df.progress_apply(lambda x: iterate_extract(x), axis = 1)
+    df.apply(lambda x: iterate_extract(x), axis = 1)
     # Drop the full-url column since we do not need it anymore
     df.drop(columns = 'full_url', inplace = True)
 
@@ -201,7 +200,7 @@ def clean_domains(df):
         else:
             return list()
 
-    df['domain_clean']=df['domain'].progress_apply(lambda x: clean_lr(x))
+    df['domain_clean']=df['domain'].apply(lambda x: clean_lr(x))
     # Drop the domain column since we do not need it anymore
     df.drop(columns = 'domain', inplace = True)
 
@@ -231,10 +230,10 @@ def df_polarization(df):
             try: x.polarization.append(get_polarization(domain)) # append the results
             except: next
 
-    df.progress_apply(lambda x: iterate_polarization(x), axis = 1)
+    df.apply(lambda x: iterate_polarization(x), axis = 1)
     
     # count the number of clean domains per observation
-    df["domain_count"] = df.polarization.progress_apply(lambda x: len(x))
+    df["domain_count"] = df.polarization.apply(lambda x: len(x))
 
 
 def tot_polarization(df):
@@ -251,7 +250,7 @@ def tot_polarization(df):
             final_sum += polarization
         return final_sum
 
-    df['polarization_sum'] = df.polarization.progress_apply(lambda x: polarization_sum(x))
+    df['polarization_sum'] = df.polarization.apply(lambda x: polarization_sum(x))
     # Drop the polarization column since we do not need it anymore
     df.drop(columns = 'polarization', inplace = True)
 
@@ -288,7 +287,8 @@ def get_weekly_pol(df):
     # Then merge it with our weekly sum
     df = df.merge(sum_tweet, how = 'left', on = ['week_start', 'scree_name'])
     # we consider useful tweets for training only those ones of users who shared more than min_tweets URLs
-    df['target_train'] = df.domain_shared.apply(lambda x: True if x >= min_tweets else False)
+    df['target_train'] = df.domain_count.apply(lambda x: True if x >= min_tweets else False)
+    return df
 
 
 # 3. Merge Pre and Post Dataset -------------------------------------------------
@@ -371,8 +371,8 @@ tot_polarization(completed)
 tot_polarization(post_df)
 
 # Get the average weekly polarization
-get_weekly_pol(completed)
-get_weekly_pol(post_df)
+completed = get_weekly_pol(completed)
+post_df = get_weekly_pol(post_df)
 
 # we limit our training set to tweets talking about politics
 training_pre = completed.loc[(completed.target_train == True) & ((completed.final_pred == 1) | (completed.final_pred == 2))]
