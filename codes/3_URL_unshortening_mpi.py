@@ -222,6 +222,8 @@ if rank == 0:
         # If we have none of them (or some error occurred) - signal that we do not have them
         if len(failed) == size:
             check_merge = False
+        else:
+            check_merge = True
     except:
         print("No past scrape")
         store = {}
