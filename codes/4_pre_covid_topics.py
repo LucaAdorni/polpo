@@ -423,15 +423,24 @@ class BertModule(pl.LightningModule):
     # ---------------------
     def configure_optimizers(self):
         # REQUIRED
-        # can return multiple optimizers and learning_rate schedulers
-        # (LBFGS it is automatically supported, no need for closure function)
-        optimizer = torch.optim.Adam([p for p in self.parameters() if p.requires_grad], lr=self.hparams.learning_rate, eps=1e-08)
-        #scheduler = StepLR(optimizer, step_size=1, gamma=0.2)
-        scheduler = torch.optim.lr_scheduler.OneCycleLR(optimizer, max_lr=2e-5, epochs = self.hparams.max_epochs, steps_per_epoch = len(train))
 
-        self.sched = scheduler
-        self.optim = optimizer
-        return [optimizer], [scheduler]
+        optimizer = torch.optim.AdamW([p for p in self.parameters() if p.requires_grad], lr=self.hparams.learning_rate, eps=1e-08, weight_decay=self.hparams.optimizer_weight_decay)
+        scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
+            optimizer,
+            factor=self.hparams.lr_scheduler_factor,
+            patience=self.hparams.lr_scheduler_patience,
+            min_lr=self.hparams.lr_scheduler_min_lr,
+        )
+
+        optim_config = {
+            "optimizer": optimizer,
+            "lr_scheduler": {
+                "scheduler": scheduler,
+                "monitor": "avg_val_loss",
+            },
+        }
+
+        return optim_config
 
     def fit(self) -> None:
         self._set_seed(self.hparams.random_seed)
@@ -521,7 +530,7 @@ class BertModule(pl.LightningModule):
             "accumulate_grad_batches": 1,
             "accelerator": 'gpu',
             "devices": 1,
-            "max_epochs": 10,
+            "max_epochs": 6,
             # Callback params
             "checkpoint_monitor": "avg_val_loss",
             "checkpoint_monitor_mode": "min",
@@ -532,10 +541,9 @@ class BertModule(pl.LightningModule):
             # Optimizer params
             'learning_rate': 5e-05,
             "optimizer_name": "adamw",
-            "optimizer_lr": 1e-04,
             "optimizer_weight_decay": 1e-3,
             "lr_scheduler_factor": 0.2,
-            "lr_scheduler_patience": 5,
+            "lr_scheduler_patience": 2,
             "lr_scheduler_min_lr": 1e-7,
         }
         self.hparams.update({**default_params, **self.hparams})
@@ -661,26 +669,3 @@ for lr, batch in parameters:
     # Now save all the performances of our models
     with open(f'{path_to_results}topic_performance.pkl', 'wb') as f:
         pickle.dump(pred_performance, f)
-
-# 5. Predict over the whole Pre-Covid dataset --------------------------------------------------------------------------------------------------
-
-# First we check what is the best model
-models = []
-f1 = []
-f1_gap = []
-acc = []
-prec = []
-recall = []
-
-for k,v in pred_performance.items():
-    print(k)
-    print(v)
-    models.append(k)
-    f1.append(v['f1'])
-    f1_gap.append(v['f1_gap'])
-    acc.append(v['acc'])
-    prec.append(v['prec'])
-    recall.append(v['recall'])
-
-pred_performance
-np.argmax(f1)
