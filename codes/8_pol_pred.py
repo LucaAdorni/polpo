@@ -678,7 +678,7 @@ for lr, batch in parameters:
         pred = trainer_pred.predict(model, model.data.test_dataloader())
         mean_pred = mean_by_label(pred[0], test_dataset.index)
         # Now plot the performances of our model
-        pred_performance[f'lr_{str(lr)}_batch_{batch}'] = model_scores_multiclass(test.polarization_bin, mean_pred.y_hat, name = f'BERT-Topic-lr={str(lr)}-batch={batch}')
+        pred_performance[f'lr_{str(lr)}_batch_{batch}'] = model_scores_multiclass(test.polarization_bin, mean_pred.y_hat, name = f'BERT-Polarization-lr={str(lr)}-batch={batch}')
         # Delete the model to save memory
         del model
         torch.cuda.empty_cache() # PyTorch thing
