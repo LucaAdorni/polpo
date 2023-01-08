@@ -14,6 +14,9 @@ import pickle
 import sys
 import tldextract
 from collections import Counter
+import matplotlib.pyplot as plt
+import seaborn as sns
+import random
 
 pd.options.display.max_columns = 200
 pd.options.display.max_rows = 1000
@@ -40,6 +43,9 @@ path_to_data = f"{path_to_repo}data/"
 path_to_raw = f"{path_to_data}raw/"
 path_to_links = f"{path_to_data}links/"
 path_to_processed = f"{path_to_data}processed/"
+path_to_figures = os.path.join(path_to_data,"figures","")
+
+os.makedirs(path_to_figures, exist_ok=True)
 
 # 1. Get the Unshortened links -------------------------------------------------
 
@@ -49,54 +55,51 @@ failed = []
 store = {}
 # To ease computation, we have split our URLs into n-size lists/dictionaries (one per machine)
 # Iteratively load all of them
-# try:
-#     for i in range(0, size):
-#         try:
-#             with open(f'{path_to_links}url_dictionary_{i}.pkl', 'rb') as f: 
-#                 url_dict_i = pickle.load(f)
-#             store = {**store, **url_dict_i}
-#         except:
-#             print(f"Failed list: {i}")
-#             failed.append(i)
-#     # If we have none of them (or some error occurred) - signal that we do not have them
-#     if len(failed) == size:
-#         check_merge = False
-#     else:
-#         check_merge = True
-# except:
-#     print("No past scrape")
-#     store = {}
-#     check_merge = False
-# # If we have pre-existing URL-dictionaries for each CPU, need to merge with previous results
-# # And then re-create new lists of TO-DO URLs
-# if check_merge:
-#     # Load (if it exist) the previous dictionary of unshortened URLs
-#     try:
-#         with open(f'{path_to_links}url_dictionary.pkl', 'rb') as f: 
-#             url_dict = pickle.load(f)
-#         print("URL dictionary loaded")
-#     except:
-#         url_dict = {}
-#         print("New URL dictionary initiated")
-#     print(f"Pre-existing unshortened list of URLs length: {len(url_dict)}")
-#     # If we have some new scrape, merge it with the previous
-#     print(len(store))
-#     url_dict = {**store, **url_dict}
-#     del store
-#     print(len(url_dict))
-#     with open(f'{path_to_links}url_dictionary.pkl', 'wb') as f: 
-#             pickle.dump(url_dict, f)
-#             print("saved dictionary")
+try:
+    for i in range(0, size):
+        try:
+            with open(f'{path_to_links}url_dictionary_{i}.pkl', 'rb') as f: 
+                url_dict_i = pickle.load(f)
+            store = {**store, **url_dict_i}
+        except:
+            print(f"Failed list: {i}")
+            failed.append(i)
+    # If we have none of them (or some error occurred) - signal that we do not have them
+    if len(failed) == size:
+        check_merge = False
+    else:
+        check_merge = True
+except:
+    print("No past scrape")
+    store = {}
+    check_merge = False
+# If we have pre-existing URL-dictionaries for each CPU, need to merge with previous results
+# And then re-create new lists of TO-DO URLs
+if check_merge:
+    # Load (if it exist) the previous dictionary of unshortened URLs
+    try:
+        with open(f'{path_to_links}url_dictionary.pkl', 'rb') as f: 
+            url_dict = pickle.load(f)
+        print("URL dictionary loaded")
+    except:
+        url_dict = {}
+        print("New URL dictionary initiated")
+    print(f"Pre-existing unshortened list of URLs length: {len(url_dict)}")
+    # If we have some new scrape, merge it with the previous
+    print(len(store))
+    url_dict = {**store, **url_dict}
+    del store
+    print(len(url_dict))
+    with open(f'{path_to_links}url_dictionary.pkl', 'wb') as f: 
+            pickle.dump(url_dict, f)
+            print("saved dictionary")
         
-#     # Now remove all those previous lists/dictionaries
-#     for i in range(0, size):
-#         if os.path.exists(f'{path_to_links}url_dictionary_{i}.pkl'): os.remove(f'{path_to_links}url_dictionary_{i}.pkl')
-#         if os.path.exists(f'{path_to_links}url_list_{i}.pkl'): os.remove(f'{path_to_links}url_list_{i}.pkl')
-#     # Check which URLs we still need to unshorten
-#     print("Loading the URL lists")
-
-with open(f'{path_to_links}url_dictionary.pkl', 'rb') as f: 
-    url_dict = pickle.load(f)
+    # Now remove all those previous lists/dictionaries
+    for i in range(0, size):
+        if os.path.exists(f'{path_to_links}url_dictionary_{i}.pkl'): os.remove(f'{path_to_links}url_dictionary_{i}.pkl')
+        if os.path.exists(f'{path_to_links}url_list_{i}.pkl'): os.remove(f'{path_to_links}url_list_{i}.pkl')
+    # Check which URLs we still need to unshorten
+    print("Loading the URL lists")
 
 # 2. Define the functions to compute polarization -------------------------------------------------
 
@@ -337,46 +340,195 @@ else:
 
 # 4. Create the training dataset -------------------------------------------------
 
+# For the pre-covid data, change the topic column
+completed.loc[completed.final_pred == 1, 'topic'] = 'economics'
+completed.loc[completed.final_pred == 2, 'topic'] = 'politics'
+
+# Remove organizations (for the pre-covid we have already removed them)
+post_df = post_df.loc[post_df.is_org == 'non-org']
+
+training = pd.concat([post_df, completed])
+
 # PARAMETERS
 frequency = 'W-MON' # Set frequency of our dataset - we set it to weekly frequency, monday
 min_tweets = 3 # Set minimum number of tweets
 
 # Find all the URLs
-find_urls(completed)
-find_urls(post_df)
+find_urls(training)
 
 # Get the unshortened version
-find_full_link(completed)
-find_full_link(post_df)
+find_full_link(training)
 
 # Apply it to our pre-covid dataset
-extract_domains(completed)
-extract_domains(post_df)
+extract_domains(training)
 
 # Clean the domains
-clean_domains(completed)
-clean_domains(post_df)
+clean_domains(training)
 
 print(f"Left domains: {left_doms_count}")
 print(f"Right domains: {right_doms_count}")
 
 # Get the domain count and polarization of each tweet
-df_polarization(completed)
-print(f"Count of valid domains:\n{completed.domain_count.value_counts()}")
-df_polarization(post_df)
-print(f"Count of valid domains:\n{post_df.domain_count.value_counts()}")
+df_polarization(training)
+print(f"Count of valid domains:\n{training.domain_count.value_counts()}")
 
 # Get the total polarization per tweet - when multiple links are present
-tot_polarization(completed)
-tot_polarization(post_df)
+tot_polarization(training)
 
 # Get the average weekly polarization
-completed = get_weekly_pol(completed)
-post_df = get_weekly_pol(post_df)
+training = get_weekly_pol(training)
 
 # we limit our training set to tweets talking about politics
-training_pre = completed.loc[(completed.target_train == True) & ((completed.final_pred == 1) | (completed.final_pred == 2))]
-training_post = post_df.loc[(post_df.target_train == True) & ((post_df.topic == 'politics') | (post_df.topic == 'economics'))]
+training = training.loc[(training.target_train == True) & ((training.topic == 'politics') | (training.topic == 'economics'))]
 
-training = pd.concat([training_pre, training_post])
 training.to_pickle(f"{path_to_data}processed/training.pkl.gz", compression = 'gzip')
+
+# 5. Clean training dataset -------------------------------------------------------------
+
+training = pd.read_pickle(f"{path_to_data}processed/training.pkl.gz", compression = 'gzip')
+
+# Drop columns we do not need
+training.drop(columns = ['topic_0', 'topic_1', 'topic_2', 'final_pred', 'domain_clean', 'user_description', 'place', 'polygon', 'profile_url', 'is_org', 'sentiment', 'emotion', 'gender', 'age', 'regions', 'locations'], inplace = True)
+
+# Get info on the Users
+post_df = pd.read_csv(f"{path_to_raw}tweets_without_duplicates_regions_sentiment_demographics_topic_emotion.csv")
+post_df = post_df[['scree_name', 'regions', 'age', 'gender']]
+post_df.drop_duplicates(subset = 'scree_name', inplace = True)
+
+# Merge it with training dataset
+training = training.merge(post_df, on = 'scree_name', how = 'left', indicator = True, validate = 'm:1')
+assert training._merge.value_counts()["both"] == training.shape[0]
+training.drop(columns = '_merge', inplace = True)
+
+# Binarize our target
+training['polarization_bin'] = pd.cut(x=training['final_polarization'], bins = [-1.01, -0.6, -0.2, 0.2, 0.6, 1.01], labels = ["far_left", "center_left", "center","center_right", "far_right"])
+print(f"Distribution of target variable:\n{training.polarization_bin.value_counts()}")
+# Distribution of target variable:
+# center_left     147444
+# center          140305
+# center_right     82835
+# far_left          3507
+# far_right         1266
+# Name: polarization_bin, dtype: int64
+
+# Save our dataset
+training.to_pickle(f"{path_to_data}processed/training.pkl.gz", compression = 'gzip')
+
+# 6. Simple EDA -------------------------------------------------------------
+
+# define a function that saves figures
+def save_fig(fig_id, tight_layout=True):
+    # The path of the figures folder ./Figures/fig_id.png (fig_id is a variable that you specify 
+    # when you call the function)
+    path = os.path.join(os.getcwd(), "Figures", fig_id + ".png") 
+    print("Saving figure", fig_id)
+    if tight_layout:
+        plt.tight_layout()
+    plt.savefig(path, format='png', dpi=300)
+
+# POLARIZATION DISTRIBUTION -----------------------
+# define plot dataframe
+df_plot = training.groupby(['week_start','scree_name']).final_polarization.mean()
+df_plot = pd.DataFrame(df_plot)
+# histogram
+fig, ax = plt.subplots(figsize=(15, 10))
+sns.histplot(data= df_plot, x = "final_polarization", kde = True, bins = 50, ax = ax)
+sns.despine()
+plt.text(x=0.082, y=0.94, s="Polarization Distribution - Training Set", fontsize=30, ha="left", transform=fig.transFigure)
+plt.text(x=0.082, y=0.91, s= "Distribution of weekly user polarization scores", fontsize=22, ha="left", transform=fig.transFigure)
+plt.ylabel('Week/User Count')
+plt.xlabel('Polarization Score')
+plt.axvline(0, linewidth = 1, alpha = 0.9, color='r', linestyle = '--')
+save_fig(f'{path_to_figures}train_hist')
+
+
+# POLARIZATION OVER TIME -----------------------
+df_plot = training.groupby(['week_start', 'scree_name']).final_polarization.mean().groupby('week_start').mean()
+df_plot = pd.DataFrame(df_plot)
+# lineplot for political score
+fig, ax = plt.subplots(figsize=(15, 10))
+sns.lineplot(x = 'week_start', y = 'final_polarization', data = df_plot, ax = ax)
+sns.despine()
+plt.text(x=0.08, y=0.94, s="Weekly Average Political Score - Training Set", fontsize=30, ha="left", transform=fig.transFigure)
+plt.text(x=0.08, y=0.91, s= "Time trend of weekly average political score (from -1 for far left to +1 for far right)", fontsize=22, ha="left", transform=fig.transFigure)
+plt.ylabel('Political Score')
+plt.xlabel('Weeks')
+save_fig(f'{path_to_figures}train_mean')
+
+# 7. Create Train/Test split -------------------------------------------------------------
+
+# PARAMETERS
+test_size = 0.2
+val_size = 0.2
+train_size = 1 - test_size - val_size
+tag_size = '_02'
+random_seed = 42
+random.seed(random_seed)
+
+merge_tweets = True # set to True if we want to merge all tweets
+only_politics = True # set to True if we want to keep only politic tweets
+
+if only_politics:
+    politics_tag = '_politics'
+else:
+    politics_tag = ''
+
+if merge_tweets:
+    merged_tag = '_merged'
+else:
+    merged_tag = ''
+
+# If only politics, restrict to only politic tweets
+if only_politics:
+    print(training.shape)
+    training = training.loc[training.topic == 'politics']
+    print(training.shape)
+
+# If we want to merge all tweets per week/user
+if merge_tweets:
+    # Groupby join
+    merged_tweets = training.groupby(['scree_name', 'week_start']).tweet_text.apply(' '.join).reset_index()
+    # Get from the original dataset the final polarization score
+    clean_pol = training[['scree_name', 'week_start', 'final_polarization', 'polarization_bin']].drop_duplicates()
+    assert clean_pol.shape[0] == merged_tweets.shape[0]
+    merged_tweets = merged_tweets.merge(clean_pol, on = ['scree_name', 'week_start'], validate = '1:1')
+    # Drop any duplicates
+    merged_tweets.drop_duplicates(subset = ['scree_name', 'week_start'], inplace = True)
+
+from sklearn.model_selection import StratifiedGroupKFold
+
+cv = StratifiedGroupKFold(n_splits = 2, shuffle = True, random_state = random_seed)
+
+# we first perform a first split between training set and validation sets
+train_idxs, test_idxs = next(cv.split(merged_tweets, merged_tweets.week_start, groups = merged_tweets.scree_name))
+df_train = merged_tweets.iloc[train_idxs]
+df_test = merged_tweets.iloc[test_idxs]
+# then we split from the test set our validation and test set
+test_idxs, val_idxs = next(cv.split(df_test, df_test.week_start, groups = df_test.scree_name))
+df_test_2 = df_test.iloc[test_idxs]
+df_val = df_test.iloc[val_idxs]
+df_test = df_test_2
+# finally from our validation set, to have a bigger training set, we split it again
+val_idxs, train_idxs = next(cv.split(df_val, df_val.week_start, groups = df_val.scree_name))
+df_train_2 = df_val.iloc[train_idxs]
+df_val_2 = df_val.iloc[val_idxs]
+df_val = df_val_2
+df_train = df_train.append(df_train_2)
+
+print(f'Training Set: {df_train.shape}')
+print(f'Validation Set: {df_val.shape}')
+print(f'Test Set: {df_test.shape}')
+
+print(f'Training Set: {df_train.scree_name.nunique()}')
+print(f'Validation Set: {df_val.scree_name.nunique()}')
+print(f'Test Set: {df_test.scree_name.nunique()}')
+
+print(f'Original # Weeks: {merged_tweets.week_start.nunique()}')
+print(f'Training Set # Weeks: {df_train.week_start.nunique()}')
+print(f'Validation Set # Weeks: {df_val.week_start.nunique()}')
+print(f'Test Set # Weeks: {df_test.week_start.nunique()}')
+
+
+df_train.to_pickle(f"{path_to_data}processed/df_train.pkl.gz", compression = 'gzip')
+df_val.to_pickle(f"{path_to_data}processed/df_val.pkl.gz", compression = 'gzip')
+df_test.to_pickle(f"{path_to_data}processed/df_test.pkl.gz", compression = 'gzip')
