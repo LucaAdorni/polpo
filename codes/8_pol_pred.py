@@ -639,7 +639,7 @@ test_dataset  = TopicDataset(df = test, tokenizer = tokenizer, max_len = max_len
 
 # Loop over a variety of Parameters
 learning_rates = [3e-5, 5e-5]
-batch_size = [64, 32]
+batch_size = [32, 16]
 
 parameters = list(itertools.product(learning_rates, batch_size))
 
