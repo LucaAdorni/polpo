@@ -43,9 +43,7 @@ path_to_data = f"{path_to_repo}data/"
 path_to_raw = f"{path_to_data}raw/"
 path_to_links = f"{path_to_data}links/"
 path_to_processed = f"{path_to_data}processed/"
-path_to_figures = os.path.join(path_to_data,"figures","")
-
-os.makedirs(path_to_figures, exist_ok=True)
+path_to_figures = f"{path_to_repo}figures/"
 
 # 1. Get the Unshortened links -------------------------------------------------
 
