@@ -55,6 +55,9 @@ except:
     path_to_repo = f"{os.getcwd()}/polpo/"
     sys.path.append(f"{os.getcwd()}/.local/bin") # import the temporary path where the server installed the module
 
+
+# PARAMETERS------------------
+classification = True
   
 print(path_to_repo)
 
@@ -65,7 +68,10 @@ path_to_links = f"{path_to_data}links/"
 path_to_topic = f"{path_to_data}topic/"
 path_to_results = f"{path_to_data}results/"
 path_to_models = f"{path_to_data}models/"
-path_to_models_pol = f"{path_to_models}pol_class/"
+if classification:
+    path_to_models_pol = f"{path_to_models}pol_class/"
+else:
+    path_to_models_pol = f"{path_to_models}pol_reg/"
 path_to_processed = f"{path_to_data}processed/"
 path_to_alberto = "m-polignano-uniba/bert_uncased_L-12_H-768_A-12_italian_alb3rt0"
 
@@ -138,7 +144,11 @@ class TopicDataset(Dataset):
         df = df.reset_index()
         self.tokenizer = tokenizer
         self.max_len = max_len
-        self.texts = [padd_split(self.tokenizer.encode_plus(text, add_special_tokens = False, return_token_type_ids=True, return_tensors="pt"), label, index, percentage_filter = percentage_filter, chunksize = max_len) for text, label, index in zip(df['tweet_text'], df['polarization_bin'], df.index)]
+        if classification:
+            targ_name = "polarization_bin"
+        else:
+            targ_name = "final_polarization"
+        self.texts = [padd_split(self.tokenizer.encode_plus(text, add_special_tokens = False, return_token_type_ids=True, return_tensors="pt"), label, index, percentage_filter = percentage_filter, chunksize = max_len) for text, label, index in zip(df['tweet_text'], df[targ_name], df.index)]
         self.texts = [token for text in self.texts for token in text]
         self.labels = [dictionary["label"] for dictionary in self.texts]
         self.index = [dictionary["index"] for dictionary in self.texts]
@@ -272,8 +282,10 @@ class BertModule(pl.LightningModule):
         # Adjust the output path
         self.hparams.output_path = f"{path_to_models_pol}lr{self.hparams.learning_rate}_batch{self.hparams.batch_size}/"
         os.makedirs(self.hparams.output_path, exist_ok = True)
-        
-        self.num_labels = num_labels
+        if classification:
+            self.num_labels = num_labels
+        else:
+            self.num_labels = 1
    
         config = AutoConfig.from_pretrained(path_to_alberto)
         self.bert = AutoModel.from_pretrained(path_to_alberto)
@@ -285,6 +297,7 @@ class BertModule(pl.LightningModule):
         # relu activation function
         self.relu =  torch.nn.ReLU()
         self.softmax = torch.nn.Softmax()
+        self.tanh = torch.nn.Tanh()
 
         # Build DataModule
         self.data = self.DataModule(self)
@@ -311,7 +324,10 @@ class BertModule(pl.LightningModule):
         pooled_output = self.relu(pooled_output)  # (bs, dim)
         pooled_output = self.dropout(pooled_output)  # (bs, dim)
         logits = self.classifier(pooled_output)  # (bs, dim)
-        logits = self.softmax(logits)
+        if classification:
+            logits = self.softmax(logits)
+        else:
+            logits = self.tanh(logits)
 
         return logits
 
@@ -565,7 +581,10 @@ class BertModule(pl.LightningModule):
 
 # Function to get the mean prediction
 def mean_by_label(samples, labels):
-    df = pd.DataFrame(samples, labels, columns = [0, 1, 2, 3, 4])
+    if classification:
+        df = pd.DataFrame(samples, labels, columns = [0, 1, 2, 3, 4])
+    else:
+        df = pd.DataFrame(samples, labels, columns = [0])
     mean = df.groupby(df.index).mean()
     mean['y_hat'] = mean.idxmax(axis = 1)
     return mean
@@ -590,30 +609,37 @@ def model_scores_multiclass(y, y_hat, name = ''):
     y: true values of y
     name: specify the name if we want to save the figure
     """
-    f1score = f1_score(y,y_hat, average = 'macro')
-    f1score_all = f1_score(y,y_hat, average = None)
-    f1score_gap = max(f1score_all)- min(f1score_all)
-    prec = precision_score(y, y_hat, average = 'macro')
-    recall = recall_score(y, y_hat, average = 'macro')
-    accuracy = accuracy_score(y, y_hat)
-    print("F1-Score Macro = {}".format(round(f1score,5)))
-    print("F1-Score Gap = {}".format(round(f1score_gap,5)))
-    print("Accuracy = {}".format(round(accuracy,5)))
-    print("")
-    print(classification_report(y,y_hat,digits=5))
-    cm = confusion_matrix(y, y_hat)
-    party_list = ["far_left","center_left", "center", "center_right", "far_right"]
-    df_cm = pd.DataFrame(cm, columns=party_list, index = party_list)
-    df_cm.index.name = 'Actual'
-    df_cm.columns.name = 'Predicted'
-    plt.figure(figsize = (10,8))
-    sns.set(font_scale=1.4)#for label size
-    sns.heatmap(df_cm, cmap="Blues", annot=True, fmt='g',annot_kws={"size": 16})# font size
-    if name != '': 
-      plt.title(name)
-      save_fig(name)
-    plt.show() 
-    return {'f1':f1score, 'f1_gap': f1score_gap, 'acc': accuracy, 'prec': prec, 'recall': recall}
+    if classification:
+        f1score = f1_score(y,y_hat, average = 'macro')
+        f1score_all = f1_score(y,y_hat, average = None)
+        f1score_gap = max(f1score_all)- min(f1score_all)
+        prec = precision_score(y, y_hat, average = 'macro')
+        recall = recall_score(y, y_hat, average = 'macro')
+        accuracy = accuracy_score(y, y_hat)
+        print("F1-Score Macro = {}".format(round(f1score,5)))
+        print("F1-Score Gap = {}".format(round(f1score_gap,5)))
+        print("Accuracy = {}".format(round(accuracy,5)))
+        print("")
+        print(classification_report(y,y_hat,digits=5))
+        cm = confusion_matrix(y, y_hat)
+        party_list = ["far_left","center_left", "center", "center_right", "far_right"]
+        df_cm = pd.DataFrame(cm, columns=party_list, index = party_list)
+        df_cm.index.name = 'Actual'
+        df_cm.columns.name = 'Predicted'
+        plt.figure(figsize = (10,8))
+        sns.set(font_scale=1.4)#for label size
+        sns.heatmap(df_cm, cmap="Blues", annot=True, fmt='g',annot_kws={"size": 16})# font size
+        if name != '': 
+            plt.title(name)
+            save_fig(name)
+        plt.show() 
+        return {'f1':f1score, 'f1_gap': f1score_gap, 'acc': accuracy, 'prec': prec, 'recall': recall}
+    else:
+        mae = mean_absolute_error(y, y_hat)
+        mse = mean_squared_error(y, y_hat)
+        r_squared = r2_score(y, y_hat)
+        return {'MAE': mae, 'MSE': mse, 'R2': r_squared}
+
 
 # Define our main tokenizer
 tokenizer = AutoTokenizer.from_pretrained("/home/adorni/polpo/alberto/tokenizer/models--m-polignano-uniba--bert_uncased_L-12_H-768_A-12_italian_alb3rt0/snapshots/4454cfbc82952da79729e33e81c37a72dc095b4b")
@@ -643,9 +669,16 @@ batch_size = [32, 16]
 
 parameters = list(itertools.product(learning_rates, batch_size))
 
+if classification:
+    class_tag = ""  
+    class_name = ""
+else:
+    class_tag = "_reg"
+    class_name = "-Reg"
+
 # Initialize a list to store all our results
 try:
-    with open(f'{path_to_results}polarization_performance.pkl', "rb") as fp:   # Unpickling
+    with open(f'{path_to_results}polarization_performance{class_tag}.pkl', "rb") as fp:   # Unpickling
         pred_performance = pickle.load(fp)
         print("Loaded pre-existing results")
 except:
@@ -679,10 +712,10 @@ for lr, batch in parameters:
         pred = [y_hat for tensor in pred for y_hat in tensor.tolist()]
         mean_pred = mean_by_label(pred, test_dataset.index)
         # Now plot the performances of our model
-        pred_performance[f'lr_{str(lr)}_batch_{batch}'] = model_scores_multiclass(test.polarization_bin, mean_pred.y_hat, name = f'BERT-Polarization-lr={str(lr)}-batch={batch}')
+        pred_performance[f'lr_{str(lr)}_batch_{batch}'] = model_scores_multiclass(test.polarization_bin, mean_pred.y_hat, name = f'BERT-Polarization{class_name}-lr={str(lr)}-batch={batch}')
         # Delete the model to save memory
         del model
         torch.cuda.empty_cache() # PyTorch thing
     # Now save all the performances of our models
-    with open(f'{path_to_results}polarization_performance.pkl', 'wb') as f:
+    with open(f'{path_to_results}polarization_performance{class_tag}.pkl', 'wb') as f:
         pickle.dump(pred_performance, f)
