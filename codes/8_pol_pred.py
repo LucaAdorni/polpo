@@ -301,6 +301,13 @@ class BertModule(pl.LightningModule):
 
         # Build DataModule
         self.data = self.DataModule(self)
+        
+        # loss
+        if classification:
+            self.loss_fn = torch.nn.CrossEntropyLoss()
+        else:
+            self.loss_fn = torch.nn.MSELoss()
+
 
         self.trainer_params = self._get_trainer_params()
 
@@ -347,9 +354,10 @@ class BertModule(pl.LightningModule):
         # fwd
         y_hat = self(input_ids, attention_mask, label)
         
-        # loss
-        loss_fct = torch.nn.CrossEntropyLoss()
-        loss = loss_fct(y_hat.view(-1, self.num_labels), label.view(-1))
+        if classification:
+            loss = self.loss_fn(y_hat.view(-1, self.num_labels), label.view(-1))
+        else:
+            loss = self.loss_fn(y_hat.view(-1, self.num_labels).float(), label.view(-1).float()).float()
 
         self.log(
             "train_loss",
@@ -377,15 +385,11 @@ class BertModule(pl.LightningModule):
         attention_mask = batch['attention_mask']
         # fwd
         y_hat = self(input_ids, attention_mask, label)
-        
-        # loss
-        loss_fct = torch.nn.CrossEntropyLoss()
-        loss = loss_fct(y_hat.view(-1, self.num_labels), label.view(-1))
-
-        # acc
-        a, y_hat = torch.max(y_hat, dim=1)
-        val_acc = accuracy_score(y_hat.cpu(), label.cpu())
-        val_acc = torch.tensor(val_acc)
+        s        
+        if classification:
+            loss = self.loss_fn(y_hat.view(-1, self.num_labels), label.view(-1))
+        else:
+            loss = self.loss_fn(y_hat.view(-1, self.num_labels).float(), label.view(-1).float()).float()
 
         self.log(
             "val_loss",
@@ -418,13 +422,11 @@ class BertModule(pl.LightningModule):
         attention_mask = batch['attention_mask']
         #token_type_ids = batch['token_type_ids']
         y_hat = self(input_ids, attention_mask, label)
-        
-        # loss
-        loss_fct = torch.nn.CrossEntropyLoss()
-        loss = loss_fct(y_hat.view(-1, self.num_labels), label.view(-1))
-        
-        a, y_hat = torch.max(y_hat, dim=1)
-        test_acc = accuracy_score(y_hat.cpu(), label.cpu())
+                
+        if classification:
+            loss = self.loss_fn(y_hat.view(-1, self.num_labels), label.view(-1))
+        else:
+            loss = self.loss_fn(y_hat.view(-1, self.num_labels).float(), label.view(-1).float()).float()
 
         self.log(
             "test_loss",
