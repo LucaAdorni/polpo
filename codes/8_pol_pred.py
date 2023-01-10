@@ -385,7 +385,7 @@ class BertModule(pl.LightningModule):
         attention_mask = batch['attention_mask']
         # fwd
         y_hat = self(input_ids, attention_mask, label)
-        s        
+            
         if classification:
             loss = self.loss_fn(y_hat.view(-1, self.num_labels), label.view(-1))
         else:
