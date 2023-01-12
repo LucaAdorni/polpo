@@ -559,7 +559,7 @@ class BertModule(pl.LightningModule):
             "accumulate_grad_batches": 1,
             "accelerator": 'gpu',
             "devices": 1,
-            "max_epochs": 6,
+            "max_epochs": 10,
             # Callback params
             "checkpoint_monitor": "avg_val_loss",
             "checkpoint_monitor_mode": "min",
@@ -639,7 +639,10 @@ def model_scores_multiclass(y, y_hat, name = ''):
     else:
         mae = mean_absolute_error(y, y_hat)
         mse = mean_squared_error(y, y_hat)
-        r_squared = r2_score(y, y_hat)
+        r_squared = r2_score(y, y_hat)  
+        print(f"\nMAE: {mae}")
+        print(f"\nMSE: {mse}")
+        print(f"\nR2: {r_squared}")
         return {'MAE': mae, 'MSE': mse, 'R2': r_squared}
 
 
@@ -653,7 +656,7 @@ print(f"Is CUDA Available? {use_cuda}")
 
 # MAIN PARAMETERS
 max_len = 256
-percentage_filter = 1
+percentage_filter = 0.4
 
 # Remove index
 train.reset_index(inplace = True, drop = True)
