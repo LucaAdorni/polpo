@@ -656,7 +656,7 @@ print(f"Is CUDA Available? {use_cuda}")
 
 # MAIN PARAMETERS
 max_len = 256
-percentage_filter = 0.4
+percentage_filter = 1
 
 # Remove index
 train.reset_index(inplace = True, drop = True)
@@ -717,7 +717,11 @@ for lr, batch in parameters:
         pred = [y_hat for tensor in pred for y_hat in tensor.tolist()]
         mean_pred = mean_by_label(pred, test_dataset.index)
         # Now plot the performances of our model
-        pred_performance[f'lr_{str(lr)}_batch_{batch}'] = model_scores_multiclass(test.polarization_bin, mean_pred.y_hat, name = f'BERT-Polarization{class_name}-lr={str(lr)}-batch={batch}')
+        if classification:
+            targ_name = "polarization_bin"
+        else:
+            targ_name = "final_polarization"
+        pred_performance[f'lr_{str(lr)}_batch_{batch}'] = model_scores_multiclass(test[targ_name], mean_pred.y_hat, name = f'BERT-Polarization{class_name}-lr={str(lr)}-batch={batch}')
         # Delete the model to save memory
         del model
         torch.cuda.empty_cache() # PyTorch thing
