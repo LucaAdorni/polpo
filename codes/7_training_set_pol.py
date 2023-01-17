@@ -507,12 +507,12 @@ df_test = merged_tweets.iloc[test_idxs]
 test_idxs, val_idxs = next(cv.split(df_test, df_test.week_start, groups = df_test.scree_name))
 df_test_2 = df_test.iloc[test_idxs]
 df_val = df_test.iloc[val_idxs]
-df_test = df_test_2
-# finally from our test set, to have a bigger training set, we split it again
-val_idxs, train_idxs = next(cv.split(df_test, df_test.week_start, groups = df_test.scree_name))
-df_train_2 = df_test.iloc[train_idxs]
-df_test_2 = df_test.iloc[val_idxs]
 df_test = df_test_2.copy()
+# finally from our test set, to have a bigger training set, we split it again
+val_idxs, train_idxs = next(cv.split(df_val, df_val.week_start, groups = df_val.scree_name))
+df_train_2 = df_val.iloc[train_idxs]
+df_val_2 = df_val.iloc[val_idxs]
+df_val = df_val_2.copy()
 df_train = df_train.append(df_train_2)
 
 print(f'Training Set: {df_train.shape}')
