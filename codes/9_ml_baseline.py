@@ -27,8 +27,6 @@ from sklearn.metrics import precision_score
 from sklearn.metrics import recall_score
 import seaborn as sns
 import matplotlib.pyplot as plt
-from sklearn.feature_extraction.text import TfidfVectorizer
-from sklearn.feature_extraction.text import CountVectorizer
 from tabulate import tabulate
 import dill
 from sklearn.ensemble import RandomForestRegressor
@@ -37,16 +35,8 @@ from catboost import CatBoostRegressor
 import lightgbm
 
 ##for clustering
-import nltk
-nltk.download('punkt')
-nltk.download('stopwords')
-from nltk.corpus import stopwords
-from nltk.stem.snowball import SnowballStemmer
-from nltk import word_tokenize
+
 from sklearn.linear_model import Lasso
-import re
-from unidecode import unidecode
-import emoji
 
 try:
     # Setup Repository
@@ -57,52 +47,31 @@ except:
     sys.path.append(f"{os.getcwd()}/.local/bin") # import the temporary path where the server installed the module
 
 
-# PARAMETERS------------------
-classification = True
-  
 print(path_to_repo)
 
 path_to_data = f"{path_to_repo}data/"
 path_to_figures = f"{path_to_repo}figures/"
+path_to_tables = f"{path_to_repo}tables/"
 path_to_raw = f"{path_to_data}raw/"
 path_to_links = f"{path_to_data}links/"
 path_to_topic = f"{path_to_data}topic/"
 path_to_results = f"{path_to_data}results/"
 path_to_models = f"{path_to_data}models/"
-if classification:
-    path_to_models_pol = f"{path_to_models}pol_class/"
-else:
-    path_to_models_pol = f"{path_to_models}pol_reg/"
+path_to_models_pol = f"{path_to_models}ML/"
 path_to_processed = f"{path_to_data}processed/"
 path_to_alberto = "m-polignano-uniba/bert_uncased_L-12_H-768_A-12_italian_alb3rt0"
 
 os.makedirs(path_to_figures, exist_ok = True)
+os.makedirs(path_to_tables, exist_ok = True)
 os.makedirs(path_to_topic, exist_ok = True)
 os.makedirs(path_to_results, exist_ok = True)
 os.makedirs(path_to_models, exist_ok = True)
 os.makedirs(path_to_models_pol, exist_ok = True)
 
-# 2. Read Files --------------------------------------------------------------------------------------------------
 
-train = pd.read_pickle(f"{path_to_processed}df_train.pkl.gz", compression = 'gzip')
-val = pd.read_pickle(f"{path_to_processed}df_val.pkl.gz", compression = 'gzip')
-test = pd.read_pickle(f"{path_to_processed}df_test.pkl.gz", compression = 'gzip')
+# 1. Parameters --------------------------------------------------------------------------------------------------
 
-# Transform our topics into labels
-replace_dict = {"far_left": 0, "center_left": 1, "center":2, "center_right":3, "far_right":4}
-train.polarization_bin.replace(replace_dict, inplace = True)
-val.polarization_bin.replace(replace_dict, inplace = True)
-test.polarization_bin.replace(replace_dict, inplace = True)
-print(f"\nNumber of classes: {train.polarization_bin.nunique()}")
-
-
-# 3. Clean Datasets --------------------------------------------------------------------------------------------------
-
-
-MAX_FEATURES = 10000 # maximum number of features
-min_df = 5 # minimum frequency
-max_df = 0.8 # maximum frequency
-N_GRAM = (1,2) # n_gram range
+method_list = ['frequency', 'onehot','tf_idf']
 random_seed = 42
 random.seed(random_seed)
 tune_models = True
@@ -112,87 +81,7 @@ if tune_models:
 else:
   tune_tag = ''
 
-
-
-# STOPWORDS = stopwords.words("italian")
-# # we initialize our stemmer
-# stemmer = SnowballStemmer("italian", ignore_stopwords=True)
-
-# def text_prepare(text) :
-#     """
-#         text: a string        
-#         return: modified initial string
-#     """
-        
-#     text = text.lower() # lowercase text
-#     text = emoji.demojize(text) # convert emojis to text
-#     text = unidecode((text))
-#     text = re.sub("#|@", "", text) # take away hashtags or mentions but keep the word
-#     text = re.sub(r'(@[A-Za-z0–9_]+)|[^\w\s]|#|http\S+', "", text)
-#     text =  " ".join([x for x in text.split()if x not in STOPWORDS]) # delete stopwords from text
-#     text =  " ".join([stemmer.stem(x) for x in text.split()])
-#     text =  " ".join([x for x in text.split()])
-#     return text
-
-# for df in [train, val, test]:  
-#     df["text_final"] = df.tweet_text.apply(lambda x: text_prepare(x))
-
-# # Save the dataframes
-# train.to_pickle(f"{path_to_processed}train_clean.pkl.gz", compression = 'gzip')
-# test.to_pickle(f"{path_to_processed}test_clean.pkl.gz", compression = 'gzip')
-# val.to_pickle(f"{path_to_processed}val_clean.pkl.gz", compression = 'gzip')
-
-# def vectorize_to_dataframe(df, vectorizer_obj):
-#     """
-#     Function to return a dataframe from our vectorizer results
-#     """
-#     df = pd.DataFrame(data = df.toarray(), columns = vectorizer_obj.get_feature_names())
-#     return df
-
-# def vectorize_features(X_train, X_test, method = 'frequency', include_val = False, X_val = ''):
-#     """
-#     Function to perform vectorization of our test sets
-#     X_train, X_test, X_val: our dataframes
-#     method: either 'frequency', 'tf_idf', 'onehot' to employ a different BoW technique
-#     include_val: set to True if we also have a validation dataset
-#     """
-#     # initialize our vectorizer
-#     if method == 'tf_idf':
-#         vectorizer = TfidfVectorizer(ngram_range=N_GRAM, min_df=min_df, max_df=max_df, max_features=MAX_FEATURES)
-#     elif method == 'frequency':
-#         vectorizer = CountVectorizer(ngram_range=N_GRAM, min_df=min_df, max_df=max_df, max_features=MAX_FEATURES)
-#     elif method == 'onehot':
-#         vectorizer = CountVectorizer(ngram_range=N_GRAM, min_df=min_df, max_df=max_df, max_features=MAX_FEATURES, binary = True)
-        
-#     X_train = vectorizer.fit_transform(X_train.text_final)
-#     X_train = vectorize_to_dataframe(X_train, vectorizer)
-#     X_test = vectorizer.transform(X_test.text_final)
-#     X_test = vectorize_to_dataframe(X_test, vectorizer)
-#     if include_val: 
-#         X_val = vectorizer.transform(X_val.text_final)
-#         X_val = vectorize_to_dataframe(X_val, vectorizer)
-#     return X_train, X_test, X_val
-
-method_list = ['frequency', 'onehot','tf_idf']
-
-# for method in method_list:
-#     X_train, X_test, X_val = vectorize_features(train, test, method = method, include_val = True, X_val = val)
-
-#     # Save the dataframes
-#     X_train.to_pickle(f"{path_to_processed}train_clean{method}.pkl.gz", compression = 'gzip')
-#     X_test.to_pickle(f"{path_to_processed}test_clean{method}.pkl.gz", compression = 'gzip')
-#     X_val.to_pickle(f"{path_to_processed}val_clean{method}.pkl.gz", compression = 'gzip')
-
-# # Save the dataframes
-# y_train = train[['final_polarization', 'polarization_bin']]
-# y_train.to_pickle(f"{path_to_processed}y_train.pkl.gz", compression = 'gzip')
-# y_test = test[['final_polarization', 'polarization_bin']]
-# y_test.to_pickle(f"{path_to_processed}y_test.pkl.gz", compression = 'gzip')
-# y_val = val[['final_polarization', 'polarization_bin']]
-# y_val.to_pickle(f"{path_to_processed}y_val.pkl.gz", compression = 'gzip')
-
-
-# 4. Models ---------------------------------------------------------------------------------------------------
+# 2. Models ---------------------------------------------------------------------------------------------------
 
 def evaluate_model(X_df, y_df, model):
     preds = model.predict(X_df)
@@ -328,3 +217,54 @@ with open(f'{path_to_results}val_results{tune_tag}.pickle', 'wb') as handle:
     pickle.dump(results_val, handle)
 with open(f'{path_to_results}test_results{tune_tag}.pickle', 'wb') as handle:
     pickle.dump(results_test, handle)
+
+
+# Get latex code for the results
+with open(f'{path_to_results}test_results{tune_tag}.pickle', 'rb') as handle:
+    results_test = pickle.load(handle)
+
+
+model_dict = {
+    'rand_for': RandomForestRegressor(random_state = random_seed, n_jobs = -1)
+    #,'lightgbm': lightgbm.LGBMRegressor(random_state = random_seed, n_jobs = -1)
+    , 'lasso': Lasso(random_state = random_seed)
+    , 'catboost': CatBoostRegressor(random_state = random_seed)
+}
+
+method_list = ['frequency', 'onehot','tf_idf']
+def get_results(results_dict):
+    mae = []
+    mse = []
+    r2 = []
+    for estimator in model_dict.keys():
+        mae_results = [estimator]
+        mse_results = [estimator]
+        r2_results = [estimator]
+        for method in method_list:
+            mae_results.append(results_dict[method][estimator]["MAE"])
+            mse_results.append(results_dict[method][estimator]["MSE"])
+            r2_results.append(results_dict[method][estimator]["R2"])
+        mae.append(mae_results)
+        mse.append(mse_results)
+        r2.append(r2_results)
+    return mae, mse, r2
+
+mae_test, mse_test, r2_test = get_results(results_test)
+
+print(tabulate(mae_test))
+
+
+def get_results(results_dict):
+    final_results = []
+    for estimator in model_dict.keys():
+        for method in method_list:
+            final_results.append([estimator, method, "No", results_dict[method][estimator]["MAE"], results_dict[method][estimator]["MSE"], results_dict[method][estimator]["R2"]])
+    return final_results
+
+final_res = get_results(results_test)
+
+
+table = tabulate(final_res, tablefmt = 'latex', headers = ['Model', 'Method', 'Tuning', 'MAE', "MSE", "R2"], floatfmt=".4f")
+
+with open(f'{path_to_tables}table_3_ml_baseline.tex', 'w') as f:
+    f.write(table)

@@ -17,6 +17,17 @@ from collections import Counter
 import matplotlib.pyplot as plt
 import seaborn as sns
 import random
+import re
+from unidecode import unidecode
+import emoji
+import nltk
+nltk.download('punkt')
+nltk.download('stopwords')
+from nltk.corpus import stopwords
+from nltk.stem.snowball import SnowballStemmer
+from nltk import word_tokenize
+from sklearn.feature_extraction.text import TfidfVectorizer
+from sklearn.feature_extraction.text import CountVectorizer
 
 pd.options.display.max_columns = 200
 pd.options.display.max_rows = 1000
@@ -342,6 +353,21 @@ else:
 completed.loc[completed.final_pred == 1, 'topic'] = 'economics'
 completed.loc[completed.final_pred == 2, 'topic'] = 'politics'
 
+# Get some basic information on the completed pre-training dataset
+print(f"Pre-covid dataset size: {completed.shape[0]}")
+print(f"Pre-covid number of users: {completed.scree_name.nunique()}")
+print(f"Pre-covid topic distribution:\n{completed.topic.value_counts()}")
+# Pre-covid dataset size: 36136560
+# Pre-covid number of users: 385415
+# Pre-covid topic distribution:
+# 100          33370146
+# politics      2127199
+# economics      639215
+# Name: topic, dtype: int64
+
+print(f"Number of links unshortened: {len(url_dict)}")
+# Number of links unshortened: 35477216
+
 # Remove organizations (for the pre-covid we have already removed them)
 post_df = post_df.loc[post_df.is_org == 'non-org']
 
@@ -384,6 +410,16 @@ training.to_pickle(f"{path_to_data}processed/training.pkl.gz", compression = 'gz
 # 5. Clean training dataset -------------------------------------------------------------
 
 training = pd.read_pickle(f"{path_to_data}processed/training.pkl.gz", compression = 'gzip')
+print(f"Training dataset size: {training.shape[0]}")
+print(f"Training number of users: {training.scree_name.nunique()}")
+print(f"Training topic distribution:\n{training.topic.value_counts()}")
+# Training dataset size: 400326
+# Training number of users: 8607
+# Training topic distribution:
+# politics     266652
+# economics    133674
+# Name: topic, dtype: int64
+
 
 # Drop columns we do not need
 training.drop(columns = ['topic_0', 'topic_1', 'topic_2', 'final_pred', 'domain_clean', 'user_description', 'place', 'polygon', 'profile_url', 'is_org', 'sentiment', 'emotion', 'gender', 'age', 'regions', 'locations'], inplace = True)
@@ -437,7 +473,7 @@ plt.text(x=0.082, y=0.91, s= "Distribution of weekly user polarization scores", 
 plt.ylabel('Week/User Count')
 plt.xlabel('Polarization Score')
 plt.axvline(0, linewidth = 1, alpha = 0.9, color='r', linestyle = '--')
-save_fig(f'{path_to_figures}train_hist')
+save_fig(f'{path_to_figures}figure_1a_training_set_hist')
 
 
 # POLARIZATION OVER TIME -----------------------
@@ -451,7 +487,7 @@ plt.text(x=0.08, y=0.94, s="Weekly Average Political Score - Training Set", font
 plt.text(x=0.08, y=0.91, s= "Time trend of weekly average political score (from -1 for far left to +1 for far right)", fontsize=22, ha="left", transform=fig.transFigure)
 plt.ylabel('Political Score')
 plt.xlabel('Weeks')
-save_fig(f'{path_to_figures}train_mean')
+save_fig(f'{path_to_figures}figure_1b_training_set_weekly')
 
 # 7. Create Train/Test split -------------------------------------------------------------
 
@@ -465,8 +501,8 @@ tag_size = '_02'
 random_seed = 42
 random.seed(random_seed)
 
-merge_tweets = True # set to True if we want to merge all tweets
-only_politics = True # set to True if we want to keep only politic tweets
+merge_tweets = False # set to True if we want to merge all tweets
+only_politics = False # set to True if we want to keep only politic tweets
 
 if only_politics:
     politics_tag = '_politics'
@@ -494,6 +530,8 @@ if merge_tweets:
     merged_tweets = merged_tweets.merge(clean_pol, on = ['scree_name', 'week_start'], validate = '1:1')
     # Drop any duplicates
     merged_tweets.drop_duplicates(subset = ['scree_name', 'week_start'], inplace = True)
+else:
+    merged_tweets = training.copy()
 
 from sklearn.model_selection import StratifiedGroupKFold
 
@@ -529,6 +567,105 @@ print(f'Validation Set # Weeks: {df_val.week_start.nunique()}')
 print(f'Test Set # Weeks: {df_test.week_start.nunique()}')
 
 
-df_train.to_pickle(f"{path_to_data}processed/df_train.pkl.gz", compression = 'gzip')
-df_val.to_pickle(f"{path_to_data}processed/df_val.pkl.gz", compression = 'gzip')
-df_test.to_pickle(f"{path_to_data}processed/df_test.pkl.gz", compression = 'gzip')
+df_train.to_pickle(f"{path_to_data}processed/df_train{merged_tag}.pkl.gz", compression = 'gzip')
+df_val.to_pickle(f"{path_to_data}processed/df_val{merged_tag}.pkl.gz", compression = 'gzip')
+df_test.to_pickle(f"{path_to_data}processed/df_test{merged_tag}.pkl.gz", compression = 'gzip')
+
+
+
+# 8. Machine Learning Files --------------------------------------------------------------------------------------------------
+
+# For the ML Baseline, we start with the merged Train/Test/Val and then compute the various BoW methods
+train = pd.read_pickle(f"{path_to_processed}df_train_merged.pkl.gz", compression = 'gzip')
+val = pd.read_pickle(f"{path_to_processed}df_val_merged.pkl.gz", compression = 'gzip')
+test = pd.read_pickle(f"{path_to_processed}df_test_merged.pkl.gz", compression = 'gzip')
+
+# Transform our topics into labels
+replace_dict = {"far_left": 0, "center_left": 1, "center":2, "center_right":3, "far_right":4}
+train.polarization_bin.replace(replace_dict, inplace = True)
+val.polarization_bin.replace(replace_dict, inplace = True)
+test.polarization_bin.replace(replace_dict, inplace = True)
+print(f"\nNumber of classes: {train.polarization_bin.nunique()}")
+
+
+MAX_FEATURES = 10000 # maximum number of features
+min_df = 5 # minimum frequency
+max_df = 0.8 # maximum frequency
+N_GRAM = (1,2) # n_gram range
+
+STOPWORDS = stopwords.words("italian")
+# we initialize our stemmer
+stemmer = SnowballStemmer("italian", ignore_stopwords=True)
+
+def text_prepare(text) :
+    """
+        text: a string        
+        return: modified initial string
+    """
+        
+    text = text.lower() # lowercase text
+    text = emoji.demojize(text) # convert emojis to text
+    text = unidecode((text))
+    text = re.sub("#|@", "", text) # take away hashtags or mentions but keep the word
+    text = re.sub(r'(@[A-Za-z0–9_]+)|[^\w\s]|#|http\S+', "", text)
+    text =  " ".join([x for x in text.split()if x not in STOPWORDS]) # delete stopwords from text
+    text =  " ".join([stemmer.stem(x) for x in text.split()])
+    text =  " ".join([x for x in text.split()])
+    return text
+
+for df in [train, val, test]:  
+    df["text_final"] = df.tweet_text.apply(lambda x: text_prepare(x))
+
+# Save the dataframes
+train.to_pickle(f"{path_to_processed}train_clean.pkl.gz", compression = 'gzip')
+test.to_pickle(f"{path_to_processed}test_clean.pkl.gz", compression = 'gzip')
+val.to_pickle(f"{path_to_processed}val_clean.pkl.gz", compression = 'gzip')
+
+def vectorize_to_dataframe(df, vectorizer_obj):
+    """
+    Function to return a dataframe from our vectorizer results
+    """
+    df = pd.DataFrame(data = df.toarray(), columns = vectorizer_obj.get_feature_names())
+    return df
+
+def vectorize_features(X_train, X_test, method = 'frequency', include_val = False, X_val = ''):
+    """
+    Function to perform vectorization of our test sets
+    X_train, X_test, X_val: our dataframes
+    method: either 'frequency', 'tf_idf', 'onehot' to employ a different BoW technique
+    include_val: set to True if we also have a validation dataset
+    """
+    # initialize our vectorizer
+    if method == 'tf_idf':
+        vectorizer = TfidfVectorizer(ngram_range=N_GRAM, min_df=min_df, max_df=max_df, max_features=MAX_FEATURES)
+    elif method == 'frequency':
+        vectorizer = CountVectorizer(ngram_range=N_GRAM, min_df=min_df, max_df=max_df, max_features=MAX_FEATURES)
+    elif method == 'onehot':
+        vectorizer = CountVectorizer(ngram_range=N_GRAM, min_df=min_df, max_df=max_df, max_features=MAX_FEATURES, binary = True)
+        
+    X_train = vectorizer.fit_transform(X_train.text_final)
+    X_train = vectorize_to_dataframe(X_train, vectorizer)
+    X_test = vectorizer.transform(X_test.text_final)
+    X_test = vectorize_to_dataframe(X_test, vectorizer)
+    if include_val: 
+        X_val = vectorizer.transform(X_val.text_final)
+        X_val = vectorize_to_dataframe(X_val, vectorizer)
+    return X_train, X_test, X_val
+
+method_list = ['frequency', 'onehot','tf_idf']
+
+for method in method_list:
+    X_train, X_test, X_val = vectorize_features(train, test, method = method, include_val = True, X_val = val)
+
+    # Save the dataframes
+    X_train.to_pickle(f"{path_to_processed}train_clean{method}.pkl.gz", compression = 'gzip')
+    X_test.to_pickle(f"{path_to_processed}test_clean{method}.pkl.gz", compression = 'gzip')
+    X_val.to_pickle(f"{path_to_processed}val_clean{method}.pkl.gz", compression = 'gzip')
+
+# Save the dataframes
+y_train = train[['final_polarization', 'polarization_bin']]
+y_train.to_pickle(f"{path_to_processed}y_train.pkl.gz", compression = 'gzip')
+y_test = test[['final_polarization', 'polarization_bin']]
+y_test.to_pickle(f"{path_to_processed}y_test.pkl.gz", compression = 'gzip')
+y_val = val[['final_polarization', 'polarization_bin']]
+y_val.to_pickle(f"{path_to_processed}y_val.pkl.gz", compression = 'gzip')
