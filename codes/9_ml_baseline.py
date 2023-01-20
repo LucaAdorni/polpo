@@ -33,6 +33,7 @@ from sklearn.ensemble import RandomForestRegressor
 from sklearn.model_selection import RandomizedSearchCV, GridSearchCV
 from catboost import CatBoostRegressor
 import lightgbm
+import xgboost as xgb
 
 ##for clustering
 
@@ -100,6 +101,7 @@ model_dict = {
     #,'lightgbm': lightgbm.LGBMRegressor(random_state = random_seed, n_jobs = -1)
     , 'lasso': Lasso(random_state = random_seed)
     , 'catboost': CatBoostRegressor(random_state = random_seed)
+    , 'xgboost': xgb.XGBRegressor(random_state = random_seed, n_jobs = -1)
 }
 
 # PARAMETERS FOR LOGISTIC REGRESSION -------
@@ -146,6 +148,15 @@ param_lgb = {'max_depth': max_depth,
              'reg_alpha': [0, 1e-1, 1, 2, 5, 7, 10, 50, 100],
              'reg_lambda': [0, 1e-1, 1, 5, 10, 20, 50, 100]}
 
+# PARAMETERS FOR XGBOOST -----------
+param_xgb = {'max_depth': max_depth,
+             'n_estimators': n_estimators,
+             'learning_rate': learn_rate,
+             'colsample_bytree': list(np.linspace(0.1, 1, num = 10)),
+             'subsample': list(np.linspace(0.1, 1, num = 10)),
+             'reg_alpha': [0, 1e-1, 1, 2, 5, 7, 10, 50, 100],
+             'reg_lambda': [0, 1e-1, 1, 5, 10, 20, 50, 100]}
+
 # PARAMETERS FOR CATBOOSTING ------
 
 param_cat = {'iterations': n_estimators,
@@ -161,6 +172,7 @@ param_dictionary = {
     ,'lightgbm': param_lgb
     , 'lasso': param_en
     , 'catboost': param_cat
+    , 'xgboost': param_xgb
 }
 
 
@@ -172,6 +184,8 @@ y_train = pd.read_pickle(f"{path_to_processed}y_train.pkl.gz", compression = 'gz
 y_test = pd.read_pickle(f"{path_to_processed}y_test.pkl.gz", compression = 'gzip')
 y_val = pd.read_pickle(f"{path_to_processed}y_val.pkl.gz", compression = 'gzip')
 
+with open(f'{path_to_repo}log.txt', 'w') as f:
+    f.write(f'{os.cpu_count()}')
 
 for method in method_list:
     print(method)
@@ -185,6 +199,9 @@ for method in method_list:
     test_res = {}
     for estimator in model_dict.keys():
         print(estimator)
+        
+        with open(f'{path_to_repo}log.txt', 'w') as f:
+            f.write(f'{os.cpu_count()} | {method} | {estimator}')
         try:
             with open(f'{path_to_models_pol}/_{estimator}_{method}{tune_tag}', 'rb') as file:
                 model = dill.load(file)
@@ -219,52 +236,52 @@ with open(f'{path_to_results}test_results{tune_tag}.pickle', 'wb') as handle:
     pickle.dump(results_test, handle)
 
 
-# Get latex code for the results
-with open(f'{path_to_results}test_results{tune_tag}.pickle', 'rb') as handle:
-    results_test = pickle.load(handle)
+# # Get latex code for the results
+# with open(f'{path_to_results}test_results{tune_tag}.pickle', 'rb') as handle:
+#     results_test = pickle.load(handle)
 
 
-model_dict = {
-    'rand_for': RandomForestRegressor(random_state = random_seed, n_jobs = -1)
-    #,'lightgbm': lightgbm.LGBMRegressor(random_state = random_seed, n_jobs = -1)
-    , 'lasso': Lasso(random_state = random_seed)
-    , 'catboost': CatBoostRegressor(random_state = random_seed)
-}
+# model_dict = {
+#     'rand_for': RandomForestRegressor(random_state = random_seed, n_jobs = -1)
+#     #,'lightgbm': lightgbm.LGBMRegressor(random_state = random_seed, n_jobs = -1)
+#     , 'lasso': Lasso(random_state = random_seed)
+#     , 'catboost': CatBoostRegressor(random_state = random_seed)
+# }
 
-method_list = ['frequency', 'onehot','tf_idf']
-def get_results(results_dict):
-    mae = []
-    mse = []
-    r2 = []
-    for estimator in model_dict.keys():
-        mae_results = [estimator]
-        mse_results = [estimator]
-        r2_results = [estimator]
-        for method in method_list:
-            mae_results.append(results_dict[method][estimator]["MAE"])
-            mse_results.append(results_dict[method][estimator]["MSE"])
-            r2_results.append(results_dict[method][estimator]["R2"])
-        mae.append(mae_results)
-        mse.append(mse_results)
-        r2.append(r2_results)
-    return mae, mse, r2
+# method_list = ['frequency', 'onehot','tf_idf']
+# def get_results(results_dict):
+#     mae = []
+#     mse = []
+#     r2 = []
+#     for estimator in model_dict.keys():
+#         mae_results = [estimator]
+#         mse_results = [estimator]
+#         r2_results = [estimator]
+#         for method in method_list:
+#             mae_results.append(results_dict[method][estimator]["MAE"])
+#             mse_results.append(results_dict[method][estimator]["MSE"])
+#             r2_results.append(results_dict[method][estimator]["R2"])
+#         mae.append(mae_results)
+#         mse.append(mse_results)
+#         r2.append(r2_results)
+#     return mae, mse, r2
 
-mae_test, mse_test, r2_test = get_results(results_test)
+# mae_test, mse_test, r2_test = get_results(results_test)
 
-print(tabulate(mae_test))
-
-
-def get_results(results_dict):
-    final_results = []
-    for estimator in model_dict.keys():
-        for method in method_list:
-            final_results.append([estimator, method, "No", results_dict[method][estimator]["MAE"], results_dict[method][estimator]["MSE"], results_dict[method][estimator]["R2"]])
-    return final_results
-
-final_res = get_results(results_test)
+# print(tabulate(mae_test))
 
 
-table = tabulate(final_res, tablefmt = 'latex', headers = ['Model', 'Method', 'Tuning', 'MAE', "MSE", "R2"], floatfmt=".4f")
+# def get_results(results_dict):
+#     final_results = []
+#     for estimator in model_dict.keys():
+#         for method in method_list:
+#             final_results.append([estimator, method, "No", results_dict[method][estimator]["MAE"], results_dict[method][estimator]["MSE"], results_dict[method][estimator]["R2"]])
+#     return final_results
 
-with open(f'{path_to_tables}table_3_ml_baseline.tex', 'w') as f:
-    f.write(table)
+# final_res = get_results(results_test)
+
+
+# table = tabulate(final_res, tablefmt = 'latex', headers = ['Model', 'Method', 'Tuning', 'MAE', "MSE", "R2"], floatfmt=".4f")
+
+# with open(f'{path_to_tables}table_3_ml_baseline.tex', 'w') as f:
+#     f.write(table)
