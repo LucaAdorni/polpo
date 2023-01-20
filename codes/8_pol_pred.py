@@ -27,6 +27,8 @@ from sklearn.metrics import precision_score
 from sklearn.metrics import recall_score
 import seaborn as sns
 import matplotlib.pyplot as plt
+import dropbox
+from dropbox.exceptions import AuthError
 
 import torch
 from torch.nn import functional as F
@@ -56,8 +58,37 @@ except:
     sys.path.append(f"{os.getcwd()}/.local/bin") # import the temporary path where the server installed the module
 
 
+# Setup Repository
+with open(f"{path_to_repo}dropbox_key.txt", "r") as dropbox_info:
+    DROPBOX_ACCESS_TOKEN = dropbox_info.readline()
+
 # PARAMETERS------------------
-classification = True
+classification = False
+
+# MAIN PARAMETERS
+max_len = 128
+percentage_filter = 1
+# Loop over a variety of Parameters
+learning_rates = [3e-5]
+batch_size = [64]
+EPOCHS = 4
+
+merge_tweets = False # set to True if we want to merge all tweets
+only_politics = False # set to True if we want to keep only politic tweets
+
+if only_politics:
+    politics_tag = '_politics'
+else:
+    politics_tag = ''
+
+if merge_tweets:
+    merged_tag = '_merged'
+else:
+    merged_tag = ''
+
+
+
+parameters = list(itertools.product(learning_rates, batch_size))
   
 print(path_to_repo)
 
@@ -69,9 +100,9 @@ path_to_topic = f"{path_to_data}topic/"
 path_to_results = f"{path_to_data}results/"
 path_to_models = f"{path_to_data}models/"
 if classification:
-    path_to_models_pol = f"{path_to_models}pol_class/"
+    path_to_models_pol = f"{path_to_models}pol_class{merged_tag}{percentage_filter}/"
 else:
-    path_to_models_pol = f"{path_to_models}pol_reg/"
+    path_to_models_pol = f"{path_to_models}pol_reg{merged_tag}{percentage_filter}/"
 path_to_processed = f"{path_to_data}processed/"
 path_to_alberto = "m-polignano-uniba/bert_uncased_L-12_H-768_A-12_italian_alb3rt0"
 
@@ -83,9 +114,9 @@ os.makedirs(path_to_models_pol, exist_ok = True)
 
 # 2. Read Files --------------------------------------------------------------------------------------------------
 
-train = pd.read_pickle(f"{path_to_processed}df_train.pkl.gz", compression = 'gzip')
-val = pd.read_pickle(f"{path_to_processed}df_val.pkl.gz", compression = 'gzip')
-test = pd.read_pickle(f"{path_to_processed}df_test.pkl.gz", compression = 'gzip')
+train = pd.read_pickle(f"{path_to_processed}df_train{merged_tag}.pkl.gz", compression = 'gzip')
+val = pd.read_pickle(f"{path_to_processed}df_val{merged_tag}.pkl.gz", compression = 'gzip')
+test = pd.read_pickle(f"{path_to_processed}df_test{merged_tag}.pkl.gz", compression = 'gzip')
 
 # Transform our topics into labels
 replace_dict = {"far_left": 0, "center_left": 1, "center":2, "center_right":3, "far_right":4}
@@ -93,6 +124,85 @@ train.polarization_bin.replace(replace_dict, inplace = True)
 val.polarization_bin.replace(replace_dict, inplace = True)
 test.polarization_bin.replace(replace_dict, inplace = True)
 print(f"\nNumber of classes: {train.polarization_bin.nunique()}")
+
+
+def dropbox_connect():
+    """Create a connection to Dropbox."""
+
+    try:
+        dbx = dropbox.Dropbox(DROPBOX_ACCESS_TOKEN)
+    except AuthError as e:
+        print('Error connecting to Dropbox with access token: ' + str(e))
+    return dbx
+
+
+# dropbox_connect()
+
+
+def dropbox_list_files(path):
+    """Return a Pandas dataframe of files in a given Dropbox folder path in the Apps directory.
+    """
+
+    dbx = dropbox_connect()
+
+    try:
+        files = dbx.files_list_folder(path).entries
+        files_list = []
+        for file in files:
+            if isinstance(file, dropbox.files.FileMetadata):
+                metadata = {
+                    'name': file.name,
+                    'path_display': file.path_display,
+                    'client_modified': file.client_modified,
+                    'server_modified': file.server_modified
+                }
+                files_list.append(metadata)
+
+        df = pd.DataFrame.from_records(files_list)
+        return df.sort_values(by='server_modified', ascending=False)
+
+    except Exception as e:
+        print('Error getting list of files from Dropbox: ' + str(e))
+
+
+def dropbox_download_file(dropbox_file_path, local_file_path):
+    """Download a file from Dropbox to the local machine."""
+
+    try:
+        dbx = dropbox_connect()
+
+        with open(local_file_path, 'wb') as f:
+            metadata, result = dbx.files_download(path=dropbox_file_path)
+            f.write(result.content)
+    except Exception as e:
+        print('Error downloading file from Dropbox: ' + str(e))
+
+def dropbox_upload_file(local_path, local_file, dropbox_file_path):
+    """Upload a file from the local machine to a path in the Dropbox app directory.
+
+    Args:
+        local_path (str): The path to the local file.
+        local_file (str): The name of the local file.
+        dropbox_file_path (str): The path to the file in the Dropbox app directory.
+
+    Example:
+        dropbox_upload_file('.', 'test.csv', '/stuff/test.csv')
+
+    Returns:
+        meta: The Dropbox file metadata.
+    """
+
+    try:
+        dbx = dropbox_connect()
+
+        local_file_path = pathlib.Path(local_path) / local_file
+
+        with local_file_path.open("rb") as f:
+            meta = dbx.files_upload(f.read(), dropbox_file_path, mode=dropbox.files.WriteMode("overwrite"))
+
+            return meta
+    except Exception as e:
+        print('Error uploading file to Dropbox: ' + str(e))
 
 # 3. Define our BERT Module --------------------------------------------------------------------------------------------------
 
@@ -295,7 +405,6 @@ class BertModule(pl.LightningModule):
         self.dropout = torch.nn.Dropout(0.2)
 
         # relu activation function
-        self.relu =  torch.nn.ReLU()
         self.softmax = torch.nn.Softmax()
         self.tanh = torch.nn.Tanh()
 
@@ -328,7 +437,6 @@ class BertModule(pl.LightningModule):
         hidden_state = outputs[0]  # (bs, seq_len, dim)
         pooled_output = hidden_state[:, 0]  # (bs, dim)
         pooled_output = self.pre_classifier(pooled_output)  # (bs, dim)
-        pooled_output = self.relu(pooled_output)  # (bs, dim)
         pooled_output = self.dropout(pooled_output)  # (bs, dim)
         logits = self.classifier(pooled_output)  # (bs, dim)
         if classification:
@@ -559,7 +667,7 @@ class BertModule(pl.LightningModule):
             "accumulate_grad_batches": 1,
             "accelerator": 'gpu',
             "devices": 1,
-            "max_epochs": 10,
+            "max_epochs": EPOCHS,
             # Callback params
             "checkpoint_monitor": "avg_val_loss",
             "checkpoint_monitor_mode": "min",
@@ -591,7 +699,7 @@ def mean_by_label(samples, labels):
     if classification:
         mean['y_hat'] = mean.idxmax(axis = 1)
     else:
-        mean.columns = 'y_hat'
+        mean.columns = ['y_hat']
     return mean
 
 # define a function that saves figures
@@ -657,10 +765,6 @@ print(f"Is CUDA Available? {use_cuda}")
 
 # 4. Train our models --------------------------------------------------------------------------------------------------
 
-# MAIN PARAMETERS
-max_len = 256
-percentage_filter = 0.4
-
 # Remove index
 train.reset_index(inplace = True, drop = True)
 val.reset_index(inplace = True, drop = True)
@@ -671,12 +775,6 @@ train_dataset  = TopicDataset(df = train, tokenizer = tokenizer, max_len = max_l
 val_dataset  = TopicDataset(df = val, tokenizer = tokenizer, max_len = max_len, percentage_filter = percentage_filter)
 test_dataset  = TopicDataset(df = test, tokenizer = tokenizer, max_len = max_len, percentage_filter = percentage_filter)
 
-# Loop over a variety of Parameters
-learning_rates = [3e-5, 5e-5]
-batch_size = [32, 16]
-
-parameters = list(itertools.product(learning_rates, batch_size))
-
 if classification:
     class_tag = ""  
     class_name = ""
@@ -686,7 +784,7 @@ else:
 
 # Initialize a list to store all our results
 try:
-    with open(f'{path_to_results}polarization_performance{class_tag}.pkl', "rb") as fp:   # Unpickling
+    with open(f'{path_to_results}polarization_performance{class_tag}{merged_tag}{percentage_filter}.pkl', "rb") as fp:   # Unpickling
         pred_performance = pickle.load(fp)
         print("Loaded pre-existing results")
 except:
@@ -726,5 +824,5 @@ for lr, batch in parameters:
         del model
         torch.cuda.empty_cache() # PyTorch thing
     # Now save all the performances of our models
-    with open(f'{path_to_results}polarization_performance{class_tag}.pkl', 'wb') as f:
+    with open(f'{path_to_results}polarization_performance{class_tag}{merged_tag}{percentage_filter}.pkl', 'wb') as f:
         pickle.dump(pred_performance, f)
