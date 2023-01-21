@@ -47,35 +47,27 @@ os.makedirs(path_to_results, exist_ok = True)
 os.makedirs(path_to_models, exist_ok = True)
 os.makedirs(path_to_models_pol, exist_ok = True)
 
-# 1. ML Results -------------------------------------------------
+# 1. BERT Results -------------------------------------------------
 
 # Get latex code for the results
-with open(f'{path_to_results}test_results.pickle', 'rb') as handle:
-    ml = pickle.load(handle)
+with open(f'{path_to_results}polarization_performance_reg.pkl', 'rb') as handle:
+    results_test = pickle.load(handle)
 
-# Get latex code for the results
-with open(f'{path_to_results}val_results_tuned.pickle', 'rb') as handle:
-    ml_tuned = pickle.load(handle)
-
-method_list = ['frequency', 'onehot','tf_idf']
-model_list = ['lasso', 'rand_for', 'xgboost', 'catboost']
-
-def get_results(results_dict, tuned = "No"):
+def get_results(results_dict):
     final_results = []
-    for estimator in model_list:
-        for method in method_list:
-            if estimator not in list(results_dict[method].keys()):
-                final_results.append([estimator, method, tuned, np.nan, np.nan, np.nan])
-            else:    
-                final_results.append([estimator, method, tuned, results_dict[method][estimator]["MAE"], results_dict[method][estimator]["MSE"], results_dict[method][estimator]["R2"]])
+    for model, res in results_test.items():
+        lr = re.findall("lr_(.*?)_", model)[0]
+        batch = re.findall("_batch_(.*?)_", model)[0]
+        perc = re.findall("perc_(.*?)_", model)[0]
+        len = re.findall("_len_(.*?)$", model)[0]
+        type = re.findall("_batch_[0-9]*_(.*?)_", model)[0]
+
+        final_results.append([type, str(f"_{lr}"), batch, perc, len, res["MAE"], res["MSE"], res["R2"]])
     return final_results
 
-res_ml = get_results(ml)
-res_ml_tuned = get_results(ml_tuned, tuned = "Yes")
+final_res = get_results(results_test)
 
-final_res = res_ml + res_ml_tuned
+table = tabulate(final_res, tablefmt = 'latex', headers = ['Dataset', 'LR', 'Batch', 'Threshold', 'Len', "MAE", "MSE", "R2"], floatfmt=".4f")
 
-table = tabulate(final_res, tablefmt = 'latex', headers = ['Model', 'Method', 'Tuning', 'MAE', "MSE", "R2"], floatfmt=".4f")
-
-with open(f'{path_to_tables}table_3_ml_baseline.tex', 'w') as f:
+with open(f'{path_to_tables}table_5_bert_res.tex', 'w') as f:
     f.write(table)

@@ -47,27 +47,35 @@ os.makedirs(path_to_results, exist_ok = True)
 os.makedirs(path_to_models, exist_ok = True)
 os.makedirs(path_to_models_pol, exist_ok = True)
 
-# 1. BERT Results -------------------------------------------------
+# 1. ML Results -------------------------------------------------
 
 # Get latex code for the results
-with open(f'{path_to_results}polarization_performance_reg.pkl', 'rb') as handle:
-    results_test = pickle.load(handle)
+with open(f'{path_to_results}test_results.pickle', 'rb') as handle:
+    ml = pickle.load(handle)
 
-def get_results(results_dict):
+# Get latex code for the results
+with open(f'{path_to_results}val_results_tuned.pickle', 'rb') as handle:
+    ml_tuned = pickle.load(handle)
+
+method_list = {'frequency': 'TF', 'onehot': 'BIN','tf_idf': "TF-IDF"}
+model_list = {'lasso': "Lasso", 'rand_for': "Random Forest", 'xgboost': "XGBoost", 'catboost': "CatBoost"}
+
+def get_results(results_dict, tuned = "No"):
     final_results = []
-    for model, res in results_test.items():
-        lr = re.findall("lr_(.*?)_", model)[0]
-        batch = re.findall("_batch_(.*?)_", model)[0]
-        perc = re.findall("perc_(.*?)_", model)[0]
-        len = re.findall("_len_(.*?)$", model)[0]
-        type = re.findall("_batch_[0-9]*_(.*?)_", model)[0]
-
-        final_results.append([type, str(f"_{lr}"), batch, perc, len, res["MAE"], res["MSE"], res["R2"]])
+    for estimator in model_list.keys():
+        for method in method_list.keys():
+            if estimator not in list(results_dict[method].keys()):
+                final_results.append([model_list[estimator], method_list[method], tuned, np.nan, np.nan, np.nan])
+            else:    
+                final_results.append([model_list[estimator], method_list[method], tuned, results_dict[method][estimator]["MAE"], results_dict[method][estimator]["MSE"], results_dict[method][estimator]["R2"]])
     return final_results
 
-final_res = get_results(results_test)
+res_ml = get_results(ml)
+res_ml_tuned = get_results(ml_tuned, tuned = "Yes")
 
-table = tabulate(final_res, tablefmt = 'latex', headers = ['Dataset', 'LR', 'Batch', 'Threshold', 'Len', "MAE", "MSE", "R2"], floatfmt=".4f")
+final_res = res_ml + res_ml_tuned
 
-with open(f'{path_to_tables}table_4_bert_res.tex', 'w') as f:
+table = tabulate(final_res, tablefmt = 'latex', headers = ['Model', 'Method', 'Tuning', 'MAE', "MSE", "R2"], floatfmt=".4f")
+
+with open(f'{path_to_tables}table_4_ml_baseline.tex', 'w') as f:
     f.write(table)
