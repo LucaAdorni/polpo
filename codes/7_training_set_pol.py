@@ -448,48 +448,7 @@ print(f"Distribution of target variable:\n{training.polarization_bin.value_count
 # Save our dataset
 training.to_pickle(f"{path_to_data}processed/training.pkl.gz", compression = 'gzip')
 
-# 6. Simple EDA -------------------------------------------------------------
-
-# define a function that saves figures
-def save_fig(fig_id, tight_layout=True):
-    # The path of the figures folder ./Figures/fig_id.png (fig_id is a variable that you specify 
-    # when you call the function)
-    path = os.path.join(os.getcwd(), "Figures", fig_id + ".png") 
-    print("Saving figure", fig_id)
-    if tight_layout:
-        plt.tight_layout()
-    plt.savefig(path, format='png', dpi=300)
-
-# POLARIZATION DISTRIBUTION -----------------------
-# define plot dataframe
-df_plot = training.groupby(['week_start','scree_name']).final_polarization.mean()
-df_plot = pd.DataFrame(df_plot)
-# histogram
-fig, ax = plt.subplots(figsize=(15, 10))
-sns.histplot(data= df_plot, x = "final_polarization", kde = True, bins = 50, ax = ax)
-sns.despine()
-plt.text(x=0.082, y=0.94, s="Polarization Distribution - Training Set", fontsize=30, ha="left", transform=fig.transFigure)
-plt.text(x=0.082, y=0.91, s= "Distribution of weekly user polarization scores", fontsize=22, ha="left", transform=fig.transFigure)
-plt.ylabel('Week/User Count')
-plt.xlabel('Polarization Score')
-plt.axvline(0, linewidth = 1, alpha = 0.9, color='r', linestyle = '--')
-save_fig(f'{path_to_figures}figure_1a_training_set_hist')
-
-
-# POLARIZATION OVER TIME -----------------------
-df_plot = training.groupby(['week_start', 'scree_name']).final_polarization.mean().groupby('week_start').mean()
-df_plot = pd.DataFrame(df_plot)
-# lineplot for political score
-fig, ax = plt.subplots(figsize=(15, 10))
-sns.lineplot(x = 'week_start', y = 'final_polarization', data = df_plot, ax = ax)
-sns.despine()
-plt.text(x=0.08, y=0.94, s="Weekly Average Political Score - Training Set", fontsize=30, ha="left", transform=fig.transFigure)
-plt.text(x=0.08, y=0.91, s= "Time trend of weekly average political score (from -1 for far left to +1 for far right)", fontsize=22, ha="left", transform=fig.transFigure)
-plt.ylabel('Political Score')
-plt.xlabel('Weeks')
-save_fig(f'{path_to_figures}figure_1b_training_set_weekly')
-
-# 7. Create Train/Test split -------------------------------------------------------------
+# 6. Create Train/Test split -------------------------------------------------------------
 
 training = pd.read_pickle(f"{path_to_data}processed/training.pkl.gz", compression = 'gzip')
 
@@ -571,9 +530,7 @@ df_train.to_pickle(f"{path_to_data}processed/df_train{merged_tag}.pkl.gz", compr
 df_val.to_pickle(f"{path_to_data}processed/df_val{merged_tag}.pkl.gz", compression = 'gzip')
 df_test.to_pickle(f"{path_to_data}processed/df_test{merged_tag}.pkl.gz", compression = 'gzip')
 
-
-
-# 8. Machine Learning Files --------------------------------------------------------------------------------------------------
+# 7. Machine Learning Files --------------------------------------------------------------------------------------------------
 
 # For the ML Baseline, we start with the merged Train/Test/Val and then compute the various BoW methods
 train = pd.read_pickle(f"{path_to_processed}df_train_merged.pkl.gz", compression = 'gzip')
