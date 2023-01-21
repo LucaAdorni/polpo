@@ -84,8 +84,7 @@ else:
 if merge_tweets:
     merged_tag = '_merged'
 else:
-    merged_tag = ''
-
+    merged_tag = '_individual'
 
 
 parameters = list(itertools.product(learning_rates, batch_size))
@@ -784,7 +783,7 @@ else:
 
 # Initialize a list to store all our results
 try:
-    with open(f'{path_to_results}polarization_performance{class_tag}{merged_tag}{percentage_filter}.pkl', "rb") as fp:   # Unpickling
+    with open(f'{path_to_results}polarization_performance{class_tag}.pkl', "rb") as fp:   # Unpickling
         pred_performance = pickle.load(fp)
         print("Loaded pre-existing results")
 except:
@@ -819,10 +818,10 @@ for lr, batch in parameters:
         mean_pred = mean_by_label(pred, test_dataset.index)
         # Get the mean true labels
         mean_label = mean_by_label(test_dataset.labels, test_dataset.index)
-        pred_performance[f'lr_{str(lr)}_batch_{batch}'] = model_scores_multiclass(mean_label.y_hat, mean_pred.y_hat, name = f'BERT-Polarization{class_name}-lr={str(lr)}-batch={batch}')
+        pred_performance[f'lr_{str(lr)}_batch_{batch}_{merged_tag}_perc_{percentage_filter}_len_{max_len}'] = model_scores_multiclass(mean_label.y_hat, mean_pred.y_hat, name = f'BERT-Polarization{class_name}-lr={str(lr)}-batch={batch}')
         # Delete the model to save memory
         del model
         torch.cuda.empty_cache() # PyTorch thing
     # Now save all the performances of our models
-    with open(f'{path_to_results}polarization_performance{class_tag}{merged_tag}{percentage_filter}.pkl', 'wb') as f:
+    with open(f'{path_to_results}polarization_performance{class_tag}.pkl', 'wb') as f:
         pickle.dump(pred_performance, f)
