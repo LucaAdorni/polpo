@@ -90,9 +90,9 @@ else:
 
 try:
     # Load our dataset, if we have already processed it
-    x_pred = pd.read_pickle(f"{path_to_processed}df_processed.pkl.gz", compression = 'gzip')
+    pred = pd.read_pickle(f"{path_to_processed}df_processed.pkl.gz", compression = 'gzip')
     print("Dataset Loaded")
-    print(x_pred.shape[0])
+    print(pred.shape[0])
 except:
     # PRE COVID ----------------------
     pre_df = pd.read_pickle(f"{path_to_data}processed/pred_final.pkl.gz", compression = 'gzip')
@@ -130,85 +130,118 @@ except:
     # Drop any duplicates
     pred.drop_duplicates(subset = ['scree_name', 'week_start'], inplace = True)
 
+    # Sort all the values
+    pred.sort_values(by= ['scree_name', 'week_start'], inplace = True)
+
     pred.to_pickle(f"{path_to_processed}df_processed.pkl.gz", compression = 'gzip')
 
 #     # Vectorize our datasets -------------------------------------------------
 
-#     MAX_FEATURES = 10000 # maximum number of features
-#     min_df = 5 # minimum frequency
-#     max_df = 0.8 # maximum frequency
-#     N_GRAM = (1,2) # n_gram range
+MAX_FEATURES = 10000 # maximum number of features
+min_df = 5 # minimum frequency
+max_df = 0.8 # maximum frequency
+N_GRAM = (1,2) # n_gram range
 
-#     STOPWORDS = stopwords.words("italian")
-#     # we initialize our stemmer
-#     stemmer = SnowballStemmer("italian", ignore_stopwords=True)
+STOPWORDS = stopwords.words("italian")
+# we initialize our stemmer
+stemmer = SnowballStemmer("italian", ignore_stopwords=True)
 
-#     def text_prepare(text) :
-#         """
-#             text: a string        
-#             return: modified initial string
-#         """
-            
-#         text = text.lower() # lowercase text
-#         text = emoji.demojize(text) # convert emojis to text
-#         text = unidecode((text))
-#         text = re.sub("#|@", "", text) # take away hashtags or mentions but keep the word
-#         text = re.sub(r'(@[A-Za-z0–9_]+)|[^\w\s]|#|http\S+', "", text)
-#         text =  " ".join([x for x in text.split()if x not in STOPWORDS]) # delete stopwords from text
-#         text =  " ".join([stemmer.stem(x) for x in text.split()])
-#         text =  " ".join([x for x in text.split()])
-#         return text
+def text_prepare(text) :
+    """
+        text: a string        
+        return: modified initial string
+    """
+        
+    text = text.lower() # lowercase text
+    text = emoji.demojize(text) # convert emojis to text
+    text = unidecode((text))
+    text = re.sub("#|@", "", text) # take away hashtags or mentions but keep the word
+    text = re.sub(r'(@[A-Za-z0–9_]+)|[^\w\s]|#|http\S+', "", text)
+    text =  " ".join([x for x in text.split()if x not in STOPWORDS]) # delete stopwords from text
+    text =  " ".join([stemmer.stem(x) for x in text.split()])
+    text =  " ".join([x for x in text.split()])
+    return text
 
-#     print("Cleaning dataset")
-#     pred["text_final"] = pred.tweet_text.apply(lambda x: text_prepare(x))
+# Load back the training set
+train = pd.read_pickle(f"{path_to_processed}train_clean.pkl.gz", compression = 'gzip')
 
-#     # Load back the training set
-#     train = pd.read_pickle(f"{path_to_processed}train_clean.pkl.gz", compression = 'gzip')
+def vectorize_to_dataframe(df, vectorizer_obj):
+    """
+    Function to return a dataframe from our vectorizer results
+    """
+    df = pd.DataFrame(data = df.toarray(), columns = vectorizer_obj.get_feature_names())
+    return df
 
-#     def vectorize_to_dataframe(df, vectorizer_obj):
-#         """
-#         Function to return a dataframe from our vectorizer results
-#         """
-#         df = pd.DataFrame(data = df.toarray(), columns = vectorizer_obj.get_feature_names())
-#         return df
+def vectorize_features(X_train, X_test, method = 'frequency', include_val = False, X_val = ''):
+    """
+    Function to perform vectorization of our test sets
+    X_train, X_test, X_val: our dataframes
+    method: either 'frequency', 'tf_idf', 'onehot' to employ a different BoW technique
+    include_val: set to True if we also have a validation dataset
+    """
+    # initialize our vectorizer
+    if method == 'tf_idf':
+        vectorizer = TfidfVectorizer(ngram_range=N_GRAM, min_df=min_df, max_df=max_df, max_features=MAX_FEATURES)
+    elif method == 'frequency':
+        vectorizer = CountVectorizer(ngram_range=N_GRAM, min_df=min_df, max_df=max_df, max_features=MAX_FEATURES)
+    elif method == 'onehot':
+        vectorizer = CountVectorizer(ngram_range=N_GRAM, min_df=min_df, max_df=max_df, max_features=MAX_FEATURES, binary = True)
+        
+    X_train = vectorizer.fit_transform(X_train.text_final)
+    X_train = vectorize_to_dataframe(X_train, vectorizer)
+    X_test = vectorizer.transform(X_test.text_final)
+    X_test = vectorize_to_dataframe(X_test, vectorizer)
+    if include_val: 
+        X_val = vectorizer.transform(X_val.text_final)
+        X_val = vectorize_to_dataframe(X_val, vectorizer)
+    return X_train, X_test, X_val
 
-#     def vectorize_features(X_train, X_test, method = 'frequency', include_val = False, X_val = ''):
-#         """
-#         Function to perform vectorization of our test sets
-#         X_train, X_test, X_val: our dataframes
-#         method: either 'frequency', 'tf_idf', 'onehot' to employ a different BoW technique
-#         include_val: set to True if we also have a validation dataset
-#         """
-#         # initialize our vectorizer
-#         if method == 'tf_idf':
-#             vectorizer = TfidfVectorizer(ngram_range=N_GRAM, min_df=min_df, max_df=max_df, max_features=MAX_FEATURES)
-#         elif method == 'frequency':
-#             vectorizer = CountVectorizer(ngram_range=N_GRAM, min_df=min_df, max_df=max_df, max_features=MAX_FEATURES)
-#         elif method == 'onehot':
-#             vectorizer = CountVectorizer(ngram_range=N_GRAM, min_df=min_df, max_df=max_df, max_features=MAX_FEATURES, binary = True)
-            
-#         X_train = vectorizer.fit_transform(X_train.text_final)
-#         X_train = vectorize_to_dataframe(X_train, vectorizer)
-#         X_test = vectorizer.transform(X_test.text_final)
-#         X_test = vectorize_to_dataframe(X_test, vectorizer)
-#         if include_val: 
-#             X_val = vectorizer.transform(X_val.text_final)
-#             X_val = vectorize_to_dataframe(X_val, vectorizer)
-#         return X_train, X_test, X_val
 
-#     print("Count vectorizer")
-#     X_train, x_pred, _ = vectorize_features(train, pred, method = method, include_val = False)
+# Load our best ML model -------------------------------------------------
 
-#     x_pred.to_pickle(f"{path_to_processed}df_processed.pkl.gz", compression = 'gzip')
+with open(f'{path_to_models_pol}/_{estimator}_{method}{tune_tag}', 'rb') as file:
+    model = dill.load(file)
+print('Model already trained')
 
-# # 2. Load our best ML model -------------------------------------------------
+# Load the list of already predicted users
+try:
+    with open(f'{path_to_processed}pred_pol.pkl', 'rb') as f: 
+        pred_list = pickle.load(f)
+        print(f"URLs in dataset: {len(pred_list)}")
+except:
+    pred_list = []
 
-# with open(f'{path_to_models_pol}/_{estimator}_{method}{tune_tag}', 'rb') as file:
-#     model = dill.load(file)
-# print('Model already trained')
+# Work in batches
+maximum = pred.shape[0]
+minimum = len(pred_list)
+steps = 10000
+range_list = list(np.arange(minimum,maximum,steps))
+iter_count = 0
 
-# # Now predict over the whole dataset
-# preds = model.predict(x_pred)
+for i in range(len(range_list)):
+    with open(f'{path_to_repo}log_pred.txt', 'w') as f:
+        f.write(f'Doing {iter_count} - out of {maximum}')
+    min_r = range_list[i]
+    try: 
+        max_r = range_list[i+1]
+    except: 
+        max_r = maximum # if we are out of range we use the list up to its maximum
 
-# with open(f'{path_to_processed}pred_pol.pkl', 'wb') as f: 
-#     pickle.dump(preds, f)
+    batch_df = pred.loc[min_r:max_r]
+
+    print("Cleaning dataset")
+    batch_df["text_final"] = batch_df.tweet_text.apply(lambda x: text_prepare(x))
+
+    print("Count vectorizer")
+    X_train, x_pred, _ = vectorize_features(train, batch_df, method = method, include_val = False)
+
+    # Now predict over the whole dataset
+    preds = model.predict(x_pred)
+    pred_list = pred_list + list(preds)
+
+    iter_count += steps
+    with open(f'{path_to_repo}log_pred.txt', 'w') as f:
+        f.write(f'{iter_count} done - out of {maximum}')
+    if iter_count % 100000 == 0 or max_r == maximum:
+        with open(f'{path_to_processed}pred_pol.pkl', 'wb') as f: 
+            pickle.dump(pred_list, f)
