@@ -287,16 +287,9 @@ torch.manual_seed(random_seed)
 
 model.load_state_dict(torch.load(f'{path_to_models}best_torch_{learning_rate}_{batch_size}_{epoch_num}{percentage_filter}.pt', map_location = 'cpu'))
 
-# Load the list of already predicted users
-try:
-    pred_list = pd.read_pickle(f"{path_to_processed}final_df{rank}.pkl.gz", compression = 'gzip')
-    print(f"Predictions done: {len(pred_list)}")
-except:
-    pred_list = pd.DataFrame()
-
-pred['final_polarization'] = 100
+pred['prediction'] = 100
 batch_dataset = Dataset(pred)
 final_predictions = predict_from_model(model, batch_dataset, batch_size = 128, bert_model = '')
 final_predictions.reset_index(inplace = True, drop = True)
-pred['pred'] = final_predictions.pred
+pred['prediction'] = final_predictions.pred
 final_predictions.to_pickle(f"{path_to_processed}final_df.pkl.gz", compression = 'gzip')
