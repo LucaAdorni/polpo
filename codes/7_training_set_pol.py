@@ -56,6 +56,9 @@ path_to_links = f"{path_to_data}links/"
 path_to_processed = f"{path_to_data}processed/"
 path_to_figures = f"{path_to_repo}figures/"
 
+# Option to remove the Center class from our labels
+remove_cent = False
+
 # 1. Get the Unshortened links -------------------------------------------------
 
 # We need to first get back all the unshortened links
@@ -109,6 +112,9 @@ if check_merge:
         if os.path.exists(f'{path_to_links}url_list_{i}.pkl'): os.remove(f'{path_to_links}url_list_{i}.pkl')
     # Check which URLs we still need to unshorten
     print("Loading the URL lists")
+
+with open(f'{path_to_links}url_dictionary.pkl', 'rb') as f: 
+    url_dict = pickle.load(f)
 
 # 2. Define the functions to compute polarization -------------------------------------------------
 
@@ -172,6 +178,8 @@ def extract_domains(df):
 # Load the domain alignments -----------------------------------------------------------
 
 link_labels = pd.read_csv(f'{path_to_data}domain_alignment/italian_labels.csv')
+if remove_cent:
+    link_labels = link_labels.loc[link_labels.polarity_cont != 0]
 leftdf = link_labels[link_labels["polarity_cont"] <0]
 rightdf = link_labels[link_labels["polarity_cont"] >0]
 
@@ -460,7 +468,7 @@ tag_size = '_02'
 random_seed = 42
 random.seed(random_seed)
 
-merge_tweets = False # set to True if we want to merge all tweets
+merge_tweets = True # set to True if we want to merge all tweets
 only_politics = False # set to True if we want to keep only politic tweets
 
 if only_politics:
