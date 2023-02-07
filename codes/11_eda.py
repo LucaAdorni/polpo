@@ -51,7 +51,7 @@ path_to_tables = f"{path_to_repo}tables/"
 
 # Load our dataset
 df = pd.read_pickle(f"{path_to_processed}final_df.pkl.gz", compression = 'gzip')
-
+df.rename(columns = {'pred': 'prediction'}, inplace=True)
 print(f"Final n. of observations: {df.shape[0]}")
 print(f"Final n. of users: {df.scree_name.nunique()}")
 # Final n. of observations: 1652271
@@ -138,6 +138,35 @@ df.extremism_toright = df.extremism_toright.replace({False: 0, True:1})
 df.orient_change = df.orient_change.replace({False: 0, True:1})
 df.orient_change_toright = df.orient_change_toright.replace({False: 0, True:1})
 df.orient_change_toleft = df.orient_change_toleft.replace({False: 0, True:1})
+
+# get sentiment/emotion data from our past dataset
+post_df = pd.read_csv(f"{path_to_raw}tweets_without_duplicates_regions_sentiment_demographics_topic_emotion.csv")
+
+# Get dummies for the sentiments
+post_df = pd.concat([post_df[['dates', 'sentiment', 'scree_name']], pd.get_dummies(post_df.emotion)], axis = 1)
+
+# Get week start
+post_df['dates'] = pd.to_datetime(post_df.dates)
+post_df['week_start'] = post_df['dates'].dt.to_period('W').dt.start_time
+post_df.drop(columns = 'dates', inplace = True)
+# Get the number of tweets
+post_df['n_tweets'] = 1
+sum_df = post_df.groupby(['week_start', 'scree_name'], as_index=False).sum()
+# Merge it with our initial dataset
+df = df.merge(sum_df, how = 'left', on = ['week_start', 'scree_name'], validate = '1:1', indicator = True)
+df.drop(columns = '_merge', inplace = True)
+
+# Do the same also for the pre-covid period
+completed = pd.read_pickle(f"{path_to_data}processed/pred_final.pkl.gz", compression = 'gzip')
+completed['n_tweets_old'] = 1
+completed['dates'] = pd.to_datetime(completed.dates)
+completed['week_start'] = completed['dates'].dt.to_period('W').dt.start_time
+sum_df = completed.groupby(['week_start', 'scree_name'], as_index=False).n_tweets_old.sum()
+del completed
+df = df.merge(sum_df, how = 'left', on = ['week_start', 'scree_name'], validate = '1:1', indicator = True)
+df.drop(columns = '_merge', inplace = True)
+df['n_tweets'] = np.where(pd.isnull(df.n_tweets), df['n_tweets_old'], df.n_tweets)
+df.drop(columns = ['n_tweets_old'], inplace = True)
 
 df.to_pickle(f"{path_to_processed}final_df_clean.pkl.gz", compression = 'gzip')
 df.drop(columns = 'tweet_text').to_stata(f"{path_to_processed}final_df_clean.dta")
