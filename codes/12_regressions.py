@@ -71,8 +71,8 @@ def do_logit(df, col, treat = 0, constant = 1, do_log = True):
         df_copy = df.copy()
     # Get dummies for each of our weeks
     df_reg = pd.concat([df_copy[col], df_copy.scree_name, pd.get_dummies(df_copy.dist), pd.get_dummies(df_copy.gender, drop_first = True), pd.get_dummies(df_copy.age, drop_first = True)], axis = 1)
-    # Drop the week when COVID-19 happened (i.e. last week of February when first cases appeared)
-    df_reg.drop(columns = '0 days', inplace = True)
+    # Drop the week before COVID-19 happened (i.e. last week of February when first cases appeared)
+    df_reg.drop(columns = '-7 days', inplace = True)
     # Define a variable to get the distance column
     dist_col = 'dist'
     # Drop any NAs
@@ -304,8 +304,8 @@ for y in iter_emot:
 double_lineplot(store_odds['extremism_toright_ols'], store_odds['anger'], col1 = 'extremism_toright', col2 = 'anger', tag="_ols")
 double_scatter(store_odds['extremism_toright_ols'], store_odds['anger'], col1 = 'extremism_toright', col2 = 'anger', tag="")
 
-double_lineplot(store_odds['far_rigth_ols'], store_odds['anger'], col1 = 'far_right', col2 = 'anger', tag="_ols")
-double_scatter(store_odds['far_rigth_ols'], store_odds['anger'], col1 = 'far_right', col2 = 'anger', tag="")
+double_lineplot(store_odds['far_right_ols'], store_odds['anger'], col1 = 'far_right', col2 = 'anger', tag="_ols")
+double_scatter(store_odds['far_right_ols'], store_odds['anger'], col1 = 'far_right', col2 = 'anger', tag="")
 
 
 # Check any difference in age groups
@@ -344,3 +344,54 @@ double_lineplot(store_odds[f"{y}_ols_treat_age"], store_odds[f"{y}_ols_control_a
 # Uso N/Tweets si o no?
 # Cerco il modo di fare correlati Anger e Extremist
 # Provo altre coppie?
+
+# TO DO - METTO Treat/Control in una regressione unica!!
+
+
+
+
+
+# Get dummies for each of our weeks
+df_copy = df.copy()
+df_copy.loc[df_copy.treat == 0, 'dist_treat'] = "-7 days_treat"
+df_reg = pd.concat([df_copy['extremism_toright'], df_copy.scree_name, pd.get_dummies(df_copy.dist_treat), pd.get_dummies(df_copy.dist), pd.get_dummies(df_copy.gender, drop_first = True), pd.get_dummies(df_copy.age, drop_first = True)], axis = 1)
+# Drop the week before COVID-19 happened (i.e. last week of February when first cases appeared)
+df_reg.drop(columns = ['-7 days', '-7 days_treat'], inplace = True)
+# Define a variable to get the distance column
+dist_col = 'dist'
+# Drop any NAs
+df_reg.dropna(axis = 0, inplace = True)
+# Set users as our index - we will then use it to cluster the standard errors
+df_reg.set_index(df_reg.scree_name, drop = True, inplace = True)
+df_reg.drop(columns = 'scree_name', inplace = True)
+# Create our Matrix of X - by adding a constant and dropping our target column
+if constant == 0:
+    exog = df_reg.drop(columns = 'extremism_toright')
+else:
+    exog = sm.add_constant(df_reg.drop(columns = col))
+# Perform our logistic classification
+if do_log == True:
+    logit_mod = sm.Logit(df_reg['extremism_toright'], exog)
+else:
+    logit_mod = sm.OLS(df_reg['extremism_toright'], exog)
+results_logit = logit_mod.fit(cov_type = 'cluster', cov_kwds = {'groups': np.asarray(df_reg.index)})
+
+params = results_logit.params
+conf = results_logit.conf_int()
+p_value_stars = ['***' if v <= 0.001 else '**' if v <= 0.01 else '*' if v <= 0.05 else '' for v in list(results_logit.pvalues)]
+conf['Odds Ratio'] = params
+conf['P-Values'] = p_value_stars
+conf.columns = ['5%', '95%', 'Odds Ratio', 'P-Values']
+conf_odds = ['5%', '95%', 'Odds Ratio']
+# Take the exponent of everything to get the Odds-Ratios
+if do_log == True:
+    for col_exp in conf_odds:
+        conf[col] = np.exp(conf[col_exp])
+
+conf = conf[conf.index.isin(df['dist_treat'].unique())]
+conf.reset_index(inplace = True, drop = False)
+conf = pd.melt(conf, id_vars = ['index'], value_vars = ['5%', '95%', 'Odds Ratio'])
+conf.columns = [dist_col, 'variable', 'extremism_toright']
+conf = conf.merge(week_list, on = 'dist_treat', how = 'left', indicator = True, validate = 'm:1')
+assert conf._merge.value_counts()['both'] == conf.shape[0]
+return conf
