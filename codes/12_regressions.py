@@ -70,7 +70,13 @@ def do_logit(df, col, treat = 0, constant = 1, do_log = True):
     else:
         df_copy = df.copy()
     # Get dummies for each of our weeks
-    df_reg = pd.concat([df_copy[col], df_copy.scree_name, pd.get_dummies(df_copy.dist), pd.get_dummies(df_copy.gender, drop_first = True), pd.get_dummies(df_copy.age, drop_first = True)], axis = 1)
+    if treat == 3:    
+        # Get the total number of tweets as a control
+        df_copy['tot_activity'] = df_copy.groupby(['week_start', 'treat']).n_tweets.transform('sum')
+        df_reg = pd.concat([df_copy[col], df_copy.week_start,  df_copy.tot_activity, df_copy.scree_name, pd.get_dummies(df_copy.dist_treat), pd.get_dummies(df_copy.treat, drop_first=True), pd.get_dummies(df_copy.dist), pd.get_dummies(df_copy.gender, drop_first = True), pd.get_dummies(df_copy.age, drop_first = True)], axis = 1)
+        df_reg.drop(columns = '-7 days_treat', inplace = True)
+    else:
+        df_reg = pd.concat([df_copy[col], df_copy.week_start,  df_copy.tot_activity, df_copy.scree_name, pd.get_dummies(df_copy.dist), pd.get_dummies(df_copy.gender, drop_first = True), pd.get_dummies(df_copy.age, drop_first = True)], axis = 1)
     # Drop the week before COVID-19 happened (i.e. last week of February when first cases appeared)
     df_reg.drop(columns = '-7 days', inplace = True)
     # Define a variable to get the distance column
@@ -78,8 +84,8 @@ def do_logit(df, col, treat = 0, constant = 1, do_log = True):
     # Drop any NAs
     df_reg.dropna(axis = 0, inplace = True)
     # Set users as our index - we will then use it to cluster the standard errors
-    df_reg.set_index(df_reg.scree_name, drop = True, inplace = True)
-    df_reg.drop(columns = 'scree_name', inplace = True)
+    df_reg.set_index([df_reg.scree_name, df_reg.week_start], drop = True, inplace = True)
+    df_reg.drop(columns = ['scree_name', 'week_start'], inplace = True)
     # Create our Matrix of X - by adding a constant and dropping our target column
     if constant == 0:
         exog = df_reg.drop(columns = col)
@@ -103,11 +109,15 @@ def do_logit(df, col, treat = 0, constant = 1, do_log = True):
     if do_log == True:
         for col_exp in conf_odds:
             conf[col] = np.exp(conf[col_exp])
-
-    conf = conf[conf.index.isin(df[dist_col].unique())]
+    if treat == 3:
+        conf = conf[conf.index.isin(df['dist_treat'].unique())]
+    else:
+        conf = conf[conf.index.isin(df[dist_col].unique())]
     conf.reset_index(inplace = True, drop = False)
     conf = pd.melt(conf, id_vars = ['index'], value_vars = ['5%', '95%', 'Odds Ratio'])
     conf.columns = [dist_col, 'variable', col]
+    if treat == 3:
+        conf['dist'] = conf.dist.apply(lambda x: re.sub('_treat', "", x))
     conf = conf.merge(week_list, on = dist_col, how = 'left', indicator = True, validate = 'm:1')
     assert conf._merge.value_counts()['both'] == conf.shape[0]
     return conf
@@ -131,39 +141,41 @@ def time_plot(dataframe, column, tag = "", y_label = "Odds Ratios"):
 
     max_value = dataframe[column].max() - dataframe[column].max()*0.001
 
-    plt.xlabel("Week Start")
-    plt.ylabel(y_label)
-    plt.axvline(pandemic, linewidth = 1, alpha = 1, color = 'red', linestyle = '--')
+    plt.xlabel("Week Start", fontsize = 28)
+    plt.ylabel(y_label, fontsize = 28)
+    plt.axvline(pandemic, linewidth = 1.5, alpha = 1, color = 'red', linestyle = '--')
     plt.axhline(0, linewidth = 1, alpha = 0.5, color = 'black', linestyle = '--')
+    plt.yticks(fontsize = 20)
+    plt.xticks(fontsize = 20)
 
     annotation_dict = {
-        'DPCM #IoRestoaCasa': (2020, 3, 9)
-        , 'End of Lockdown': (2020, 5, 6)
-        , 'Immuni is released': (2020, 6, 15)
-        , 'Nightclub closure': (2020, 8, 17)
+        "(1)": (2020, 3, 9)
+        , '(2)': (2020, 5, 6)
+        , '(3)': (2020, 6, 15)
+        , '(4)': (2020, 8, 17)
 
     }
-
-    iter_value = 0
 
     for key, value in annotation_dict.items():
 
         week_date = dt.datetime(value[0], value[1], value[2])
         week_date = week_date - dt.timedelta(days=week_date.weekday())
-        title_ann = key
+        # Shift to the right the annotation
+        week_date2 = dt.datetime(value[0], value[1], value[2] + 8)
+        week_date2 = week_date2 - dt.timedelta(days=week_date2.weekday())
 
-        plt.axvline(week_date,linewidth=1, alpha = 1, color='black')
-        ax.annotate(title_ann, xy = (week_date, max_value*0.9999), xytext=(-50, 15 + iter_value), 
-                        textcoords='offset points', xycoords = 'data',
-                        bbox=dict(boxstyle="square", fc="white", ec="gray"), arrowprops=dict(arrowstyle='->',
-                                connectionstyle="arc3"), fontsize = 18)
-        iter_value += -33
+        plt.axvline(week_date,linewidth=1.5, alpha = 0.7, color='dimgrey', linestyle = '-.')
+        ax.text(week_date2, max_value, key, fontsize = 20, alpha = 0.7)
         
     save_fig(f'{path_to_figure_odds}{column}{tag}')
 
 
-def double_scatter(df1, df2, col1, col2, tag = ""):
+def double_scatter(df1, df2, col1, col2, col1_name, col2_name, tag = ""):
     """ Function to create a scatterplot between two regression variables"""
+    if '_merge' in df1.columns:
+        df1.drop(columns = '_merge', inplace = True)
+    if '_merge' in df2.columns:
+        df2.drop(columns = '_merge', inplace = True)
     df1 = df1.merge(df2, on = ['dist', 'variable', 'week_start'], how = 'outer', indicator = True, validate = "1:1")
     assert df1._merge.value_counts()['both'] == df1.shape[0]
     df1 = df1.loc[df1.variable == 'Odds Ratio']
@@ -172,34 +184,45 @@ def double_scatter(df1, df2, col1, col2, tag = ""):
     spear, _ = spearmanr(df1[col1], df1[col2])
     mod_ols = sm.OLS(df1[col2],df1[col1]).fit()
     fig, ax = plt.subplots(figsize=(15, 10))
-    sns.scatterplot(x=df1[col1], y=df1[col2], ax = ax)
+    sns.scatterplot(x=df1[col1], y=df1[col2], ax = ax, s = 100)
     ax.text(df1[col1].min(), df1[col2].max(), "OLS slope: {:4.3f}, R2: {:4.3f}, Pearsons: {:4.3f}, Spearman: {:4.3f}".format(
-                mod_ols.params[-1], 1-mod_ols.ssr/mod_ols.uncentered_tss, pearson, spear))
+                mod_ols.params[-1], 1-mod_ols.ssr/mod_ols.uncentered_tss, pearson, spear), fontsize = 20)
+    plt.yticks(fontsize = 20)
+    plt.xticks(fontsize = 20)
+    ax.set_ylabel(col2_name, fontsize = 28)
+    ax.set_xlabel(col1_name, fontsize = 28)
     save_fig(f'{path_to_figure_odds}{col1}_{col2}{tag}_scatter')
 
 
-def double_lineplot(df1, df2, col1, col2, tag = "", ax_2 = True):
+def double_lineplot(df1, df2, col1, col2, col1_name, col2_name, label_1, label_2, tag = "", ax_2 = True):
     """ 
     Function to get a seaborn plot with two time series 
     ax_2: set to True if we want to have two axis
     """
     fig, ax = plt.subplots(figsize=(15, 10))
     sns.lineplot(data=df1, x = 'week_start', y=col1
-                , ax=ax, label = col1, legend = False)
+                , ax=ax, label = label_1, legend = False)
+    plt.yticks(fontsize = 20)
+    plt.xticks(fontsize = 20)
     if ax_2 == True:
         ax2 = ax.twinx()   
-        ax2.set_ylabel(col2)
+        ax2.set_ylabel(col2_name, fontsize = 28)
     else:
         ax2 = ax
     sns.lineplot(data=df2, x = 'week_start', y=col2
-                , ax=ax2, label = col2, legend = False, color = 'darkorange')
-    plt.xlabel("Week Start")
-    ax.set_ylabel(col1)
+                , ax=ax2, label = label_2, legend = False, color = 'darkorange')
+    plt.xlabel("Week Start", fontsize = 28)
+    plt.yticks(fontsize = 20)
+    plt.xticks(fontsize = 20)
+    ax.set_ylabel(col1_name, fontsize = 28)
     plt.axvline(pandemic, linewidth = 1, alpha = 1, color = 'red', linestyle = '--')
     plt.axhline(0, linewidth = 1, alpha = 0.5, color = 'black', linestyle = '--')
-    h1, l1 = ax.get_legend_handles_labels()
-    h2, l2 = ax2.get_legend_handles_labels()
-    ax.legend(h1+h2, l1+l2, loc='upper right')
+    if ax_2:
+        h1, l1 = ax.get_legend_handles_labels()
+        h2, l2 = ax2.get_legend_handles_labels()
+        ax.legend(h1+h2, l1+l2, loc='upper right', fontsize = 28)
+    else:
+        plt.legend(loc = 'upper right', fontsize = 28)
     save_fig(f'{path_to_figure_odds}{col1}_{col2}{tag}')
 
 # 2. Load data and run regressions --------------------------------------------------------------
@@ -239,7 +262,7 @@ covid = covid[['week_start','regions', 'tot_cases', 'tot_deaths', 'new_cases', '
 covid.drop_duplicates(inplace = True)
 # Subset to the period considered
 covid = covid.loc[(covid.week_start <= pd.datetime(2020, 12, 31))]
-# Get the worst regions to be used as treatment
+# Get the worst regions to be used as treatment -----------------------
 sum_df = covid.groupby('regions', as_index = False).max()
 from scipy.stats import iqr
 q1, q3 = np.percentile(sum_df.tot_cases, [25,75])
@@ -250,12 +273,12 @@ iqr_deaths = iqr(sum_df.tot_deaths)
 sum_df['treat_deaths'] = sum_df.tot_deaths > iqr_deaths
 iqr_hosp = iqr(sum_df.ics_hosp)
 sum_df['treat_hosp'] = sum_df.ics_hosp > iqr_hosp
-# Plot the covid deaths/cases
+# Plot the covid deaths/cases -----------------------------------------
 cov_sum = covid.groupby('week_start', as_index = False).sum()
 time_plot(cov_sum, 'tot_cases', tag = '_covid', y_label = 'COVID-19 Cases')
 time_plot(cov_sum, 'tot_deaths', tag = '_covid', y_label = 'COVID-19 Deaths')
 
-
+# Merge it with our initial dataset
 df = df.merge(covid, on =['regions', 'week_start'], how = 'left', indicator = True, validate = 'm:1')
 df._merge.value_counts()
 
@@ -274,23 +297,28 @@ time_plot(tot_tw, 'n_tweets', y_label = 'N. of tweets')
 # Create also 0/1 for being in a certain group
 df = pd.concat([df, pd.get_dummies(df.polarization_bin)], axis = 1)
 
+# 3. Run the Regressions
 
-iter_list = ['extremism_toright', 'extremism_toleft', 'orient_change', 'orient_change_toleft',     
-       'orient_change_toright', 'polarization_change', 'extremism', 'far_left', 'center_left', 'center',
-       'center_right', 'far_right']
+iter_dict = {'extremism_toright': 'Extremism to the Right',
+             'extremism_toleft': 'Extremism to the Left', 
+             'orient_change': "Orientation change", 
+             'orient_change_toleft': "Orientation change to the Left",     
+            'orient_change_toright': "Orientation change to the Right", 
+            'polarization_change': "Polarization change", 
+            'extremism': "Extremism", 
+            'far_left': "Far Left", 
+            'center_left': "Center Left", 
+            'center': "Center",
+            'center_right': "Center Right", 
+            'far_right': "Far Right"}
 
 store_odds = {}
 # Iterate over all our otcomes and get the odds ratio graphs
-for y in iter_list:
-    store_odds[y] = do_logit(df, y, treat = 0)
-    time_plot(store_odds[y], y, "")
+for y, label in iter_dict.items():
     store_odds[f"{y}_ols"] = do_logit(df, y, treat = 0, do_log = False)
-    time_plot(store_odds[f"{y}_ols"], y, "_ols", y_label = y)
-    store_odds[f"{y}_ols_treat"] = do_logit(df, y, treat = 1, do_log = False)
-    time_plot(store_odds[f"{y}_ols_treat"], y, "_ols_treat", y_label = y)
-    store_odds[f"{y}_ols_control"] = do_logit(df, y, treat = 2, do_log = False)
-    time_plot(store_odds[f"{y}_ols_control"], y, "_ols_control", y_label = y)
-    double_lineplot(store_odds[f"{y}_ols_treat"], store_odds[f"{y}_ols_control"], y, y, tag = "_treat_comp", ax_2 = False)
+    time_plot(store_odds[f"{y}_ols"], y, "_ols", y_label = label)
+    store_odds[f"{y}_ols_did"] = do_logit(df, y, treat = 3, do_log = False)
+    time_plot(store_odds[f"{y}_ols_did"], y, "_ols_did", y_label = f"{label} (DiD)")
 
 iter_emot = ['sentiment', 'anger', 'fear', 'joy', 'sadness']
 
@@ -298,100 +326,39 @@ for y in iter_emot:
     df[y] = df[y]/df.n_tweets
     print(y)
     conf = do_logit(df, y, treat = 0, do_log = False)
-    time_plot(conf, y, "")
+    time_plot(conf, y, "", y_label = y.capitalize())
     store_odds[y] = conf
+    conf = do_logit(df, y, treat = 3, do_log = False)
+    time_plot(conf, y, "_did", y_label = f"{y.capitalize()} (DiD)")
+    store_odds[f"{y}_did"] = conf
 
-double_lineplot(store_odds['extremism_toright_ols'], store_odds['anger'], col1 = 'extremism_toright', col2 = 'anger', tag="_ols")
-double_scatter(store_odds['extremism_toright_ols'], store_odds['anger'], col1 = 'extremism_toright', col2 = 'anger', tag="")
-
-double_lineplot(store_odds['far_right_ols'], store_odds['anger'], col1 = 'far_right', col2 = 'anger', tag="_ols")
-double_scatter(store_odds['far_right_ols'], store_odds['anger'], col1 = 'far_right', col2 = 'anger', tag="")
-
-
-# Check any difference in age groups
-df['treat'] = df.age.isin(['>=40', '<=18'])
-df['treat'].replace({False: 0, True:1}, inplace = True)
-df['dist_treat'] = df.dist + "_treat"
-
-y = 'extremism_toright'
-store_odds[f"{y}_ols_treat_age"] = do_logit(df, y, treat = 1, do_log = True)
-time_plot(store_odds[f"{y}_ols_treat_age"], y, "_ols_treat_age", y_label = y)
-store_odds[f"{y}_ols_control_age"] = do_logit(df, y, treat = 2, do_log = True)
-time_plot(store_odds[f"{y}_ols_control_age"], y, "_ols_control_age", y_label = y)
-double_lineplot(store_odds[f"{y}_ols_treat_age"], store_odds[f"{y}_ols_control_age"], y, y, tag = "_treat_comp_age", ax_2 = False)
+for y, v in iter_dict.items():
+    for emo in iter_emot:
+        double_lineplot(store_odds[f'{y}_ols'], store_odds[emo], col1 = y, col2 = emo, col1_name= v, col2_name = emo.capitalize(), label_1 = y, label_2 = v, tag="_ols")
+        double_scatter(store_odds[f'{y}_ols'], store_odds[emo], col1 = y, col2 = emo, col1_name= v, col2_name = emo.capitalize(), tag="")
+        double_lineplot(store_odds[f'{y}_ols_did'], store_odds[f"{emo}_did"], col1 = y, col2 = emo, col1_name= f"{v} (DiD)", col2_name = f"{emo.capitalize()} (DiD)", label_1 = y, label_2 = v, tag="_ols_did")
+        double_scatter(store_odds[f'{y}_ols_did'], store_odds[f"{emo}_did"], col1 = y, col2 = emo, col1_name= f"{v} (DiD)", col2_name = f"{emo.capitalize()} (DiD)", tag="_did")
 
 
-# # Try to Fill Values
-# # Create balanced panels with NaNs using stack/unstack
-# df.set_index('scree_name', inplace = True, drop = False)
-# df = df.set_index('week_start', append=True).unstack().stack(dropna=False)
-# df['far_right']= df.groupby(level = 0).far_right.bfill().ffill()
-# df['gender']= df.groupby(level = 0).gender.bfill().ffill()
-# df['age']= df.groupby(level = 0).age.bfill().ffill()
-# df['scree_name']= df.groupby(level = 0).scree_name.bfill().ffill()
-# # Fillna() works within columns/rows; stack and unstack appropriately to use this method
-# df = df.unstack('scree_name')
-# df['city_code'] = df['far_right'].fillna(method='ffill').fillna(method='bfill')
-# df = df.stack().swaplevel().sort_index()
-# print(df)
+# Get the total number of tweets as a control
+df['tot_activity'] = df.groupby(['week_start', 'treat']).n_tweets.transform('sum')
+df['users'] = 1
+tot_tw = df.groupby(['week_start', 'treat'], as_index = False)['users','tot_activity'].sum()
 
-# conf = do_logit(df, 'far_right', treat = 0, do_log = False)
-# time_plot(conf, 'far_right', tag = "_prova")
-
-# TBD - Invece che treated location, faccio Week + Week*Dosage (dosage = numero di morti per regione/settimana se trovo i dati)
-# Altrimenti uso come treated le 5 locatio con piu' morti nella prima ondata/primo anno? Check also time frame
-
-# Uso N/Tweets si o no?
-# Cerco il modo di fare correlati Anger e Extremist
-# Provo altre coppie?
-
-# TO DO - METTO Treat/Control in una regressione unica!!
+double_lineplot(tot_tw.loc[tot_tw.treat == 1], tot_tw.loc[tot_tw.treat == 0], col1 = 'users', col2 = 'users', col1_name= 'Active Users', col2_name = 'Active Users', label_1 = "Treatment", label_2 = "Control", tag="_treat_comp", ax_2 = False)
 
 
+# Political Survey Comparison ------------------------------------
 
+# we import survey data on political alignment
+survey = pd.read_excel(f'{path_to_data}political_survey.xlsx')
 
+survey["date"] = pd.to_datetime(survey.Partito) # create a date variable
+survey["month"] = survey.date.dt.month # extract the month
+survey = survey[survey.date.dt.year == 2020] # filter all non 2020 dates
+survey = survey[survey.month <= 9]
 
-# Get dummies for each of our weeks
-df_copy = df.copy()
-df_copy.loc[df_copy.treat == 0, 'dist_treat'] = "-7 days_treat"
-df_reg = pd.concat([df_copy['extremism_toright'], df_copy.scree_name, pd.get_dummies(df_copy.dist_treat), pd.get_dummies(df_copy.dist), pd.get_dummies(df_copy.gender, drop_first = True), pd.get_dummies(df_copy.age, drop_first = True)], axis = 1)
-# Drop the week before COVID-19 happened (i.e. last week of February when first cases appeared)
-df_reg.drop(columns = ['-7 days', '-7 days_treat'], inplace = True)
-# Define a variable to get the distance column
-dist_col = 'dist'
-# Drop any NAs
-df_reg.dropna(axis = 0, inplace = True)
-# Set users as our index - we will then use it to cluster the standard errors
-df_reg.set_index(df_reg.scree_name, drop = True, inplace = True)
-df_reg.drop(columns = 'scree_name', inplace = True)
-# Create our Matrix of X - by adding a constant and dropping our target column
-if constant == 0:
-    exog = df_reg.drop(columns = 'extremism_toright')
-else:
-    exog = sm.add_constant(df_reg.drop(columns = col))
-# Perform our logistic classification
-if do_log == True:
-    logit_mod = sm.Logit(df_reg['extremism_toright'], exog)
-else:
-    logit_mod = sm.OLS(df_reg['extremism_toright'], exog)
-results_logit = logit_mod.fit(cov_type = 'cluster', cov_kwds = {'groups': np.asarray(df_reg.index)})
-
-params = results_logit.params
-conf = results_logit.conf_int()
-p_value_stars = ['***' if v <= 0.001 else '**' if v <= 0.01 else '*' if v <= 0.05 else '' for v in list(results_logit.pvalues)]
-conf['Odds Ratio'] = params
-conf['P-Values'] = p_value_stars
-conf.columns = ['5%', '95%', 'Odds Ratio', 'P-Values']
-conf_odds = ['5%', '95%', 'Odds Ratio']
-# Take the exponent of everything to get the Odds-Ratios
-if do_log == True:
-    for col_exp in conf_odds:
-        conf[col] = np.exp(conf[col_exp])
-
-conf = conf[conf.index.isin(df['dist_treat'].unique())]
-conf.reset_index(inplace = True, drop = False)
-conf = pd.melt(conf, id_vars = ['index'], value_vars = ['5%', '95%', 'Odds Ratio'])
-conf.columns = [dist_col, 'variable', 'extremism_toright']
-conf = conf.merge(week_list, on = 'dist_treat', how = 'left', indicator = True, validate = 'm:1')
-assert conf._merge.value_counts()['both'] == conf.shape[0]
-return conf
+melted_survey = pd.melt(survey, id_vars = ['Partito','date', 'month'])
+melted_survey.rename(columns = {'variable': 'Party'}, inplace = True)
+melted_survey = melted_survey[(melted_survey.Party != 'Coraggio Italia')&(melted_survey.Party != 'Cambiamo')&(melted_survey.Party != 'SX')&(melted_survey.Party != 'Europa Verde')&(melted_survey.Party != 'Cambiamo!')]
+# melted_survey = melted_survey[(melted_survey.Party != 'SX')&(melted_survey.Party != 'Cambiamo!')&(melted_survey.Party != 'Coraggio Italia')&(melted_survey.Party != 'Europa Verde')&(melted_survey.Party != 'Più Europa')&(melted_survey.Party != 'Italia Viva')&(melted_survey.Party != 'Azione')]
