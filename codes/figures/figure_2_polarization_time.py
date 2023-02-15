@@ -77,30 +77,27 @@ sns.lineplot(x = 'week_start', y = 'prediction', data = df_plot, ax = ax)
 sns.despine()
 plt.ylabel('Political Score')
 plt.xlabel('Weeks')
+max_value = df_plot["prediction"].max() - df_plot["prediction"].max()*0.001
+pandemic = pd.datetime(2020, 2, 24)
+plt.axvline(pandemic, linewidth = 1, alpha = 1, color = 'red', linestyle = '--')
 
 annotation_dict = {
-      'First COVID-19 Cases': (2020, 2, 21)
-      , 'DPCM #IoRestoaCasa': (2020, 3, 9)
-      , 'End of Lockdown': (2020, 5, 6)
-      , 'Immuni is released': (2020, 6, 15)
-      , 'Nightclub closure': (2020, 8, 17)
+    "(1)": (2020, 3, 9)
+    , '(2)': (2020, 5, 6)
+    , '(3)': (2020, 6, 15)
+    , '(4)': (2020, 8, 17)
 
-  }
+}
 
-iter_value = 0
-max_value = df_plot["prediction"].max() - df_plot["prediction"].max()*0.001
 for key, value in annotation_dict.items():
- 
+
     week_date = dt.datetime(value[0], value[1], value[2])
     week_date = week_date - dt.timedelta(days=week_date.weekday())
-    title_ann = key
+    # Shift to the right the annotation
+    week_date2 = dt.datetime(value[0], value[1], value[2] + 8)
+    week_date2 = week_date2 - dt.timedelta(days=week_date2.weekday())
 
-    plt.axvline(week_date,linewidth=1, alpha = 1, color='black')
-    ax.annotate(title_ann, xy = (week_date, max_value*0.9999), xytext=(-50, 15 + iter_value), 
-                    textcoords='offset points', xycoords = 'data',
-                    bbox=dict(boxstyle="square", fc="white", ec="gray"), arrowprops=dict(arrowstyle='->',
-                            connectionstyle="arc3"), fontsize = 18)
-    iter_value += -35
-    
+    plt.axvline(week_date,linewidth=1.5, alpha = 0.7, color='dimgrey', linestyle = '-.')
+    ax.text(week_date2, max_value, key, fontsize = 20, alpha = 0.7)
 
 save_fig(f'{path_to_figures}figure_2_polarization_time')

@@ -70,37 +70,52 @@ print(f"Number of users pre-post covid: {df.loc[df.check].scree_name.nunique()}"
 # Number of users pre-post covid: 133638
 
 # Create a polarization variable
-df['polarization_bin'] = pd.cut(x=df['prediction'], bins = [-1.01, -0.5, -0.1, 0.1, 0.5, 1.01], labels = ["far_left", "center_left", "center","center_right", "far_right"])
+# df['polarization_bin'] = pd.cut(x=df['prediction'], bins = [-1.01, -0.5, -0.1, 0.1, 0.5, 1.01], labels = ["far_left", "center_left", "center","center_right", "far_right"])
+
+def discr_bin(x):
+    if x < -0.5:
+        return 'far_left'
+    elif x < -0.1:
+        return 'center_left'
+    elif x <= 0.1:
+        return 'center'
+    elif x <= 0.5:
+        return 'center_right'
+    else:
+        return 'far_right'
+
+df['polarization_bin'] = df.prediction.apply(lambda x: discr_bin(x))
+
 print(f"Polarization bins:\n{df.polarization_bin.value_counts()}")
 # Polarization bins:
-# center_left     722824
-# center          670150
-# center_right    249539
-# far_left          7425
-# far_right         2333
+# center_left     1072287
+# center           374793
+# center_right     132105
+# far_left          71197
+# far_right          1889
 # Name: polarization_bin, dtype: int64
 print(f"Polarization bins:\n{df.loc[df.check].polarization_bin.value_counts()}")
 # Polarization bins:
-# center_left     536065
-# center          476131
-# center_right    176927
-# far_left          5879
-# far_right         1705
+# center_left     777891
+# center          269446
+# center_right     95969
+# far_left         51988
+# far_right         1413
 # Name: polarization_bin, dtype: int64
 
 # Get the user leaning
 df['leaning'] = pd.cut(x=df['prediction'], bins = [-1.01, -0.1, 0.1,1.01], labels = ["left", "center","right"])
 print(f"Leaning bins:\n{df.leaning.value_counts()}")
 # Leaning bins:
-# left      730249
-# center    670150
-# right     251872
+# left      1143484
+# center     374793
+# right      133994
 # Name: leaning, dtype: int64
 print(f"Polarization bins:\n{df.loc[df.check].leaning.value_counts()}")
 # Polarization bins:
-# left      541944
-# center    476131
-# right     178632
+# left      829879
+# center    269446
+# right      97382
 # Name: leaning, dtype: int64
 
 
@@ -196,29 +211,27 @@ def time_plot(dataframe, column, title, subtitle, ylabel, title_position = 0.085
     max_value = dataframe[column].max() - dataframe[column].max()*0.001
     plt.xlabel('Weeks')
     plt.ylabel(ylabel)
+    pandemic = pd.datetime(2020, 2, 24)
+    plt.axvline(pandemic, linewidth = 1, alpha = 1, color = 'red', linestyle = '--')
+    
     annotation_dict = {
-        'First COVID-19 Cases': (2020, 2, 21)
-        , 'DPCM #IoRestoaCasa': (2020, 3, 9)
-        , 'End of Lockdown': (2020, 5, 6)
-        , 'Immuni is released': (2020, 6, 15)
-        , 'Nightclub closure': (2020, 8, 17)
+        "(1)": (2020, 3, 9)
+        , '(2)': (2020, 5, 6)
+        , '(3)': (2020, 6, 15)
+        , '(4)': (2020, 8, 17)
 
     }
-
-    iter_value = 0
 
     for key, value in annotation_dict.items():
 
         week_date = dt.datetime(value[0], value[1], value[2])
         week_date = week_date - dt.timedelta(days=week_date.weekday())
-        title_ann = key
+        # Shift to the right the annotation
+        week_date2 = dt.datetime(value[0], value[1], value[2] + 8)
+        week_date2 = week_date2 - dt.timedelta(days=week_date2.weekday())
 
-        plt.axvline(week_date,linewidth=1, alpha = 1, color='black')
-        ax.annotate(title_ann, xy = (week_date, max_value*0.9999), xytext=(-50, 15 + iter_value), 
-                        textcoords='offset points', xycoords = 'data',
-                        bbox=dict(boxstyle="square", fc="white", ec="gray"), arrowprops=dict(arrowstyle='->',
-                                connectionstyle="arc3"), fontsize = 18)
-        iter_value += -35
+        plt.axvline(week_date,linewidth=1.5, alpha = 0.7, color='dimgrey', linestyle = '-.')
+        ax.text(week_date2, max_value, key, fontsize = 20, alpha = 0.7)
 
     save_fig(f'{path_to_figures}{column}_overtime')
 
