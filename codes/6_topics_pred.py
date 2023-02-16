@@ -637,7 +637,8 @@ max_range = 2
 n_machines = 125
 
 for iter in range(0,max_range):
-    rank = rank + iter*n_machines
+    if iter != 0:
+        rank = rank + n_machines
     # Load the scraped pre-covid tweets
     try:
         scraped_df = pd.read_pickle(f'{path_to_raw}batches/batch_{rank}.pkl.gz', compression='gzip')
