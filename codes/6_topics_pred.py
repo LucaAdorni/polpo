@@ -51,6 +51,9 @@ from typing import Callable, Dict, Generator, List, Tuple, Union
 from pathlib import PurePosixPath
 import itertools
 
+import transformers
+from transformers import pipeline
+
 from pytorch_lightning.callbacks import (
     EarlyStopping,
     LearningRateMonitor,
@@ -564,6 +567,20 @@ def model_scores_multiclass(y, y_hat, name = ''):
     plt.show() 
     return {'f1':f1score, 'f1_gap': f1score_gap, 'acc': accuracy, 'prec': prec, 'recall': recall}
 
+
+# Need to get the correct emotion
+def get_max_emotion(x):
+    store = []
+    eval = []
+    for pred in x:
+        store.append(pred['label'])
+        eval.append(pred['score'])
+    pred_f = store[np.argmax(eval)]
+    return pred_f
+
+# Load the FEEL-IT Model
+classifier = pipeline("text-classification",model='MilaNLProc/feel-it-italian-emotion',top_k=2)
+
 # Define our main tokenizer
 tokenizer = AutoTokenizer.from_pretrained("/home/adorni/polpo/alberto/tokenizer/models--m-polignano-uniba--bert_uncased_L-12_H-768_A-12_italian_alb3rt0/snapshots/4454cfbc82952da79729e33e81c37a72dc095b4b")
 
@@ -672,6 +689,11 @@ for iter in range(0,max_range):
             scraped_df.reset_index(inplace = True, drop = True)
             pred.reset_index(inplace = True, drop = True)
             scraped_df = pd.concat([scraped_df, pred], axis = 1)
+
+            # Use FEEL-IT to predict emotions
+            em_pred = classifier(batch.tweet_text.tolist())
+            scraped_df['emotion'] = em_pred
+            scraped_df['emotion'] = scraped_df.emotion.apply(lambda x: get_max_emotion(x))
 
             # Then save it
             scraped_df.reset_index(inplace = True, drop = True)
