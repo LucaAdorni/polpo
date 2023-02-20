@@ -211,16 +211,16 @@ def double_lineplot(df1, df2, col1, col2, col1_name, col2_name, label_1, label_2
         ax2 = ax
     sns.lineplot(data=df2, x = 'week_start', y=col2
                 , ax=ax2, label = label_2, legend = False, color = 'darkorange')
-    plt.xlabel("Week Start", fontsize = 28)
     plt.yticks(fontsize = 20)
     plt.xticks(fontsize = 20)
     ax.set_ylabel(col1_name, fontsize = 28)
     plt.axvline(pandemic, linewidth = 1, alpha = 1, color = 'red', linestyle = '--')
-    plt.axhline(0, linewidth = 1, alpha = 0.5, color = 'black', linestyle = '--')
+    # plt.axhline(0, linewidth = 1, alpha = 0.5, color = 'black', linestyle = '--')
+    ax.set_xlabel("Week Start", fontsize = 28)
     if ax_2:
         h1, l1 = ax.get_legend_handles_labels()
         h2, l2 = ax2.get_legend_handles_labels()
-        ax.legend(h1+h2, l1+l2, loc='upper right', fontsize = 28)
+        ax2.legend(h1+h2, l1+l2, loc='upper right', fontsize = 28)
     else:
         plt.legend(loc = 'upper right', fontsize = 28)
     save_fig(f'{path_to_figure_odds}{col1}_{col2}{tag}')
@@ -334,9 +334,9 @@ for y in iter_emot:
 
 for y, v in iter_dict.items():
     for emo in iter_emot:
-        double_lineplot(store_odds[f'{y}_ols'], store_odds[emo], col1 = y, col2 = emo, col1_name= v, col2_name = emo.capitalize(), label_1 = y, label_2 = v, tag="_ols")
+        double_lineplot(store_odds[f'{y}_ols'], store_odds[emo], col1 = y, col2 = emo, col1_name= v, col2_name = emo.capitalize(), label_1 = v, label_2 = emo.capitalize(), tag="_ols")
         double_scatter(store_odds[f'{y}_ols'], store_odds[emo], col1 = y, col2 = emo, col1_name= v, col2_name = emo.capitalize(), tag="")
-        double_lineplot(store_odds[f'{y}_ols_did'], store_odds[f"{emo}_did"], col1 = y, col2 = emo, col1_name= f"{v} (DiD)", col2_name = f"{emo.capitalize()} (DiD)", label_1 = y, label_2 = v, tag="_ols_did")
+        double_lineplot(store_odds[f'{y}_ols_did'], store_odds[f"{emo}_did"], col1 = y, col2 = emo, col1_name= f"{v} (DiD)", col2_name = f"{emo.capitalize()} (DiD)", label_1 = v, label_2 = emo.capitalize(), tag="_ols_did")
         double_scatter(store_odds[f'{y}_ols_did'], store_odds[f"{emo}_did"], col1 = y, col2 = emo, col1_name= f"{v} (DiD)", col2_name = f"{emo.capitalize()} (DiD)", tag="_did")
 
 
@@ -346,6 +346,7 @@ df['users'] = 1
 tot_tw = df.groupby(['week_start', 'treat'], as_index = False)['users','tot_activity'].sum()
 
 double_lineplot(tot_tw.loc[tot_tw.treat == 1], tot_tw.loc[tot_tw.treat == 0], col1 = 'users', col2 = 'users', col1_name= 'Active Users', col2_name = 'Active Users', label_1 = "Treatment", label_2 = "Control", tag="_treat_comp", ax_2 = False)
+double_lineplot(tot_tw.loc[tot_tw.treat == 1], tot_tw.loc[tot_tw.treat == 0], col1 = 'tot_activity', col2 = 'tot_activity', col1_name= 'Tweets', col2_name = 'Tweets', label_1 = "Treatment", label_2 = "Control", tag="_treat_comp", ax_2 = False)
 
 
 # Political Survey Comparison ------------------------------------
@@ -362,3 +363,13 @@ melted_survey = pd.melt(survey, id_vars = ['Partito','date', 'month'])
 melted_survey.rename(columns = {'variable': 'Party'}, inplace = True)
 melted_survey = melted_survey[(melted_survey.Party != 'Coraggio Italia')&(melted_survey.Party != 'Cambiamo')&(melted_survey.Party != 'SX')&(melted_survey.Party != 'Europa Verde')&(melted_survey.Party != 'Cambiamo!')]
 # melted_survey = melted_survey[(melted_survey.Party != 'SX')&(melted_survey.Party != 'Cambiamo!')&(melted_survey.Party != 'Coraggio Italia')&(melted_survey.Party != 'Europa Verde')&(melted_survey.Party != 'Più Europa')&(melted_survey.Party != 'Italia Viva')&(melted_survey.Party != 'Azione')]
+
+
+# CHECK DID-------------------------------------------
+
+df['treat'] = df.regions.isin(sum_df.loc[sum_df.treat_cases].regions.unique())
+df['treat'].replace({False: 0, True:1}, inplace = True)
+df['dist_treat'] = df.dist + "_treat"
+y = 'extremism_toright'
+store_odds[f"{y}_ols_did_2"] = do_logit(df, y, treat = 3, do_log = False)
+time_plot(store_odds[f"{y}_ols_did_2"], y, "_ols_did_2", y_label = f"{label} (DiD)")
