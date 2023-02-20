@@ -173,15 +173,23 @@ df.drop(columns = '_merge', inplace = True)
 
 # Do the same also for the pre-covid period
 completed = pd.read_pickle(f"{path_to_data}processed/pred_final.pkl.gz", compression = 'gzip')
+# Get dummies for the sentiments
+completed = pd.concat([completed[['dates', 'scree_name']], pd.get_dummies(completed.emotion)], axis = 1)
+
 completed['n_tweets_old'] = 1
+completed.rename(columns = {'anger': 'anger_old', 'fear': 'fear_old', 'joy': 'joy_old', 'sadness': 'sadness_old'}, inplace = True)
 completed['dates'] = pd.to_datetime(completed.dates)
 completed['week_start'] = completed['dates'].dt.to_period('W').dt.start_time
-sum_df = completed.groupby(['week_start', 'scree_name'], as_index=False).n_tweets_old.sum()
+completed = completed[['week_start', 'scree_name', 'n_tweets_old', 'fear_old', 'anger_old', 'joy_old', 'sadness_old']]
+sum_df = completed.groupby(['week_start', 'scree_name'], as_index=False).sum()
 del completed
 df = df.merge(sum_df, how = 'left', on = ['week_start', 'scree_name'], validate = '1:1', indicator = True)
 df.drop(columns = '_merge', inplace = True)
 df['n_tweets'] = np.where(pd.isnull(df.n_tweets), df['n_tweets_old'], df.n_tweets)
 df.drop(columns = ['n_tweets_old'], inplace = True)
+for col in ['fear', 'anger', 'joy', 'sadness']:
+    df[col] = np.where(pd.isnull(df[col]), df[f'{col}_old'], df[col])
+    df.drop(columns = f'{col}_old', inplace = True)
 
 df.to_pickle(f"{path_to_processed}final_df_clean.pkl.gz", compression = 'gzip')
 df.drop(columns = 'tweet_text').to_stata(f"{path_to_processed}final_df_clean.dta")
