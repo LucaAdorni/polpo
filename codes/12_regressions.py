@@ -55,7 +55,7 @@ os.makedirs(path_to_figure_odds, exist_ok = True)
 # 1. Define our main functions ------------------------------------------------------------
 
 # Drop NAs
-def do_logit(df, col, treat = 0, constant = 1, do_log = True, interval = 1):
+def do_logit(df, col, treat = 0, constant = 1, do_log = True, interval = 1, region_fe = False):
     """
     Function to perform a logistic regression and give back a dataframe with the odds ratio
     df: our original dataset
@@ -102,6 +102,8 @@ def do_logit(df, col, treat = 0, constant = 1, do_log = True, interval = 1):
         df_reg.drop(columns = to_drop_treat, inplace = True)
     else:
         df_reg = pd.concat([df_copy[col], df_copy[time_fe],  df_copy.tot_activity, df_copy.scree_name, pd.get_dummies(df_copy[dist_colname]), pd.get_dummies(df_copy.gender, drop_first = True), pd.get_dummies(df_copy.age, drop_first = True)], axis = 1)
+    if region_fe:
+        df_reg = pd.concat([df_reg, pd.get_dummies(df_copy.regions)], axis = 1)
     # Drop the week before COVID-19 happened (i.e. last week of February when first cases appeared)
     df_reg.drop(columns = to_drop, inplace = True)
     # Define a variable to get the distance column
@@ -317,6 +319,7 @@ month_list = df[['dist_month', 'month']].drop_duplicates()
 # LOAD COVID-19 DATA ----------------------------------------------------------
 
 path_to_covid = "/Users/ADORNI/Documents/COVID-19/dati-regioni/"
+path_to_covid = "/Users/luca9/Documenti/COVID-19/dati-regioni/"
 covid = []
 for file in os.listdir(path_to_covid):
     f = pd.read_csv(f"{path_to_covid}{file}")
@@ -340,15 +343,26 @@ covid.drop_duplicates(inplace = True)
 covid = covid.loc[(covid.week_start <= pd.datetime(2020, 12, 31))]
 # Get the worst regions to be used as treatment -----------------------
 sum_df = covid.groupby('regions', as_index = False).max()
+pop = pd.read_csv(f"{path_to_data}popolazione_regioni.csv")
+sum_df = sum_df.merge(pop, on = "regions", how = "left", validate = "1:1")
+# Get the % of affected
+for col in ["tot_cases", "tot_deaths", "ics_hosp"]:
+    sum_df[col] = sum_df[col]/sum_df["pop"]
 from scipy.stats import iqr
 q1, q3 = np.percentile(sum_df.tot_cases, [25,75])
 iqr_cases = iqr(sum_df.tot_cases)
-sum_df['treat_cases'] = sum_df.tot_cases > iqr_cases
+sum_df['treat_cases'] = sum_df.tot_cases > iqr_cases + q1
 q1, q3 = np.percentile(sum_df.tot_deaths, [25,75])
 iqr_deaths = iqr(sum_df.tot_deaths)
-sum_df['treat_deaths'] = sum_df.tot_deaths > iqr_deaths
+sum_df['treat_deaths'] = sum_df.tot_deaths > iqr_deaths + q1
+q1, q3 = np.percentile(sum_df.ics_hosp, [25,75])
 iqr_hosp = iqr(sum_df.ics_hosp)
-sum_df['treat_hosp'] = sum_df.ics_hosp > iqr_hosp
+sum_df['treat_hosp'] = sum_df.ics_hosp > iqr_hosp + q1
+# Build a composite measure
+sum_df["composite"] = sum_df.tot_cases * sum_df.tot_deaths
+q1, q3 = np.percentile(sum_df.composite, [25,75])
+iqr_composite = iqr(sum_df.composite)
+sum_df['treat_composite'] = sum_df.composite > iqr_composite + q1
 # Plot the covid deaths/cases -----------------------------------------
 cov_sum = covid.groupby('week_start', as_index = False).sum()
 time_plot(cov_sum, 'tot_cases', tag = '_covid', y_label = 'COVID-19 Cases')
@@ -361,7 +375,9 @@ df._merge.value_counts()
 # ----------------------------------------------------------------------------
 
 # Generate a dummy for the most affected regions
-df['treat'] = df.regions.isin(sum_df.loc[sum_df.treat_deaths].regions.unique())
+affected = sum_df.loc[(sum_df.treat_hosp)].regions.unique().tolist()
+affected = sum_df.loc[sum_df.treat_composite].regions.unique().tolist()
+df['treat'] = df.regions.isin(affected)
 df['treat'].replace({False: 0, True:1}, inplace = True)
 df['dist_treat'] = df.dist + "_treat"
 df['dist_month_treat'] = df.dist_month + "_treat"
@@ -395,11 +411,11 @@ store_odds = {}
 for y, label in iter_dict.items():
     store_odds[f"{y}_ols"] = do_logit(df, y, treat = 0, do_log = False)
     time_plot(store_odds[f"{y}_ols"], y, "_ols", y_label = label)
-    store_odds[f"{y}_ols_did"] = do_logit(df, y, treat = 3, do_log = False)
+    store_odds[f"{y}_ols_did"] = do_logit(df, y, treat = 3, do_log = False, region_fe=True)
     time_plot(store_odds[f"{y}_ols_did"], y, "_ols_did", y_label = f"{label} (DiD)")
-    store_odds[f"{y}_ols_did_b"] = do_logit(df, y, treat = 3, do_log = False, interval = 2)
+    store_odds[f"{y}_ols_did_b"] = do_logit(df, y, treat = 3, do_log = False, interval = 2, region_fe=True)
     time_plot(store_odds[f"{y}_ols_did_b"], y, "_ols_did_biweek", y_label = f"{label} (DiD)", x = 'biweek')
-    store_odds[f"{y}_ols_did_m"] = do_logit(df, y, treat = 3, do_log = False, interval = 4)
+    store_odds[f"{y}_ols_did_m"] = do_logit(df, y, treat = 3, do_log = False, interval = 4, region_fe=True)
     time_plot(store_odds[f"{y}_ols_did_m"], y, "_ols_did_month", y_label = f"{label} (DiD)", x = 'month')
 
 iter_emot = ['sentiment', 'anger', 'fear', 'joy', 'sadness']
@@ -605,3 +621,68 @@ plt.axhline(0, color = 'b')
 plt.show()
 
 time_plot(store_odds[f"{y}_ols_did_2"], y, "_ols_did_2", y_label = f"{label} (DiD)")
+
+
+
+
+# Generate a dummy for the most affected regions
+df['treat'] = df.regions.isin(["Lombardia", "Veneto", "Campania"])
+df['treat'].replace({False: 0, True:1}, inplace = True)
+df['dist_treat'] = df.dist + "_treat"
+df['dist_month_treat'] = df.dist_month + "_treat"
+df['dist_bi_treat'] = df.dist_bi + "_treat"
+
+store_focus = {}
+# Iterate over all our otcomes and get the odds ratio graphs
+for y, label in iter_dict.items():
+    store_focus[f"{y}_ols_did"] = do_logit(df, y, treat = 3, do_log = False)
+    time_plot(store_focus[f"{y}_ols_did"], y, "_ols_did_focus", y_label = f"{label} (DiD)")
+    store_focus[f"{y}_ols_did_b"] = do_logit(df, y, treat = 3, do_log = False, interval = 2)
+    time_plot(store_focus[f"{y}_ols_did_b"], y, "_ols_did_biweek_focus", y_label = f"{label} (DiD)", x = 'biweek')
+    store_focus[f"{y}_ols_did_m"] = do_logit(df, y, treat = 3, do_log = False, interval = 4)
+    time_plot(store_focus[f"{y}_ols_did_m"], y, "_ols_did_month_focus", y_label = f"{label} (DiD)", x = 'month')
+
+
+
+# COMPARE SINGLE MOST-AFFECTED REGIONS TO CONTROLS
+controls = sum_df.loc[(sum_df.treat_cases == False) & (sum_df.treat_deaths == False)].regions.unique().tolist()
+
+for tr_region in ["Lombardia", "Veneto", "Campania", "Piemonte", "Valle d'Aosta", "Emilia-Romagna"]:
+        
+    # Generate a dummy for the most affected regions
+    df['treat'] = df.regions.isin([tr_region])
+    df['treat'].replace({False: 0, True:1}, inplace = True)
+    df['dist_treat'] = df.dist + "_treat"
+    df['dist_month_treat'] = df.dist_month + "_treat"
+    df['dist_bi_treat'] = df.dist_bi + "_treat"
+
+    # Drop treated regions
+    df_r = df.loc[df.regions.isin(controls + [tr_region])]
+
+    iter_dict = {'extremism_toright': 'Extremism to the Right',
+                'extremism_toleft': 'Extremism to the Left', 
+                'orient_change': "Orientation change", 
+                'orient_change_toleft': "Orientation change to the Left",     
+                'orient_change_toright': "Orientation change to the Right", 
+                'polarization_change': "Polarization change", 
+                'extremism': "Extremism", 
+                'far_left': "Far Left", 
+                'center_left': "Center Left", 
+                'center': "Center",
+                'center_right': "Center Right", 
+                'far_right': "Far Right"}
+    
+    if tr_region == "Valle d'Aosta":
+        tr_region = "valle_aosta"
+    else:
+        tr_region = tr_region.lower()
+
+    store_odds = {}
+    # Iterate over all our otcomes and get the odds ratio graphs
+    for y, label in iter_dict.items():
+        store_odds[f"{y}_ols_did"] = do_logit(df_r, y, treat = 3, do_log = False, region_fe=True)
+        time_plot(store_odds[f"{y}_ols_did"], y, f"_ols_did{tr_region}", y_label = f"{label} (DiD)")
+        store_odds[f"{y}_ols_did_b"] = do_logit(df_r, y, treat = 3, do_log = False, interval = 2, region_fe=True)
+        time_plot(store_odds[f"{y}_ols_did_b"], y, f"_ols_did_biweek{tr_region}", y_label = f"{label} (DiD)", x = 'biweek')
+        store_odds[f"{y}_ols_did_m"] = do_logit(df_r, y, treat = 3, do_log = False, interval = 4, region_fe=True)
+        time_plot(store_odds[f"{y}_ols_did_m"], y, f"_ols_did_month{tr_region}", y_label = f"{label} (DiD)", x = 'month')
