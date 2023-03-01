@@ -178,7 +178,8 @@ def time_plot(dataframe, column, tag = "", y_label = "Odds Ratios", x = 'week_st
             , '(2)': (2020, 5, 4)
             , '(3)': (2020, 6, 15)
             , '(4)': (2020, 8, 10)
-
+            , '(5)': (2020, 10, 12)
+            , '(6)': (2020, 11, 2)
         }
     else:
         plt.xlabel("Week Start", fontsize = 28)
@@ -188,7 +189,8 @@ def time_plot(dataframe, column, tag = "", y_label = "Odds Ratios", x = 'week_st
             , '(2)': (2020, 5, 4)
             , '(3)': (2020, 6, 15)
             , '(4)': (2020, 8, 17)
-
+            , '(5)': (2020, 10, 12)
+            , '(6)': (2020, 11, 2)
         }
     plt.ylabel(y_label, fontsize = 28)
     
@@ -202,7 +204,8 @@ def time_plot(dataframe, column, tag = "", y_label = "Odds Ratios", x = 'week_st
             , '(2)': 5
             , '(3)': 6
             , '(4)': 8
-
+            , '(5)': 10
+            , '(6)': 11
         }
 
         for key, value in annotation_dict.items():
@@ -319,7 +322,6 @@ month_list = df[['dist_month', 'month']].drop_duplicates()
 # LOAD COVID-19 DATA ----------------------------------------------------------
 
 path_to_covid = "/Users/ADORNI/Documents/COVID-19/dati-regioni/"
-path_to_covid = "/Users/luca9/Documenti/COVID-19/dati-regioni/"
 covid = []
 for file in os.listdir(path_to_covid):
     f = pd.read_csv(f"{path_to_covid}{file}")
@@ -478,151 +480,6 @@ store_odds[f"{y}_ols_control"] = do_logit(df, y, treat = 2, do_log = False)
 store_odds[f"{y}_ols_treat"] = do_logit(df, y, treat = 1, do_log = False)
 
 double_lineplot(store_odds[f'{y}_ols_treat'], store_odds[f"{y}_ols_control"], col1 = y, col2 = y, col1_name=y, col2_name=y, label_1= f"Treat", label_2 = f"Control", tag="_did_comp", ax_2 = False, )
-
-
-# Get the sum over months/regions
-df['user'] = 1
-regions = df.loc[df.regions != np.nan].groupby(['week_start', 'regions', 'dist'], as_index = False).sum()
-
-for col in iter_dict.keys():
-    regions[f'{col}_p'] = regions[col]/regions['user']
-
-
-
-regions.head()
-
-
-sns.lineplot(data = regions, x = 'week_start', y = 'extremism_p', hue = 'regions')
-
-plt.show()
-
-nord = ['Abruzzo', 'Basilicata', 'Calabria', 'Campania', 'Emilia-Romagna', 
-'Friuli-Venezia Giulia', 'Lazio', 'Liguria', 'Lombardia', 'Marche', 
-'Molise', 'Piemonte', 'Puglia', 'Sardegna', 'Sicilia', 'Toscana', 
-'Trentino-Alto Adige', 'Umbria', "Valle d'Aosta", 'Veneto']
-
-
-nord = ['Emilia-Romagna', 
-'Friuli-Venezia Giulia', 'Liguria', 'Lombardia', 'Piemonte', 'Toscana', 
-'Trentino-Alto Adige', "Valle d'Aosta", 'Veneto']
-
-
-nord = ['Emilia-Romagna', 'Lazio', 'Lombardia', 'Piemonte', 'Sicilia', 'Toscana', 'Veneto']
-
-nord = ['Emilia-Romagna', 'Lazio', 'Lombardia', 'Piemonte', 'Toscana', 'Veneto']
-
-['Campania', 'Emilia-Romagna', 'Lazio', 'Lombardia', 'Piemonte', 'Veneto']
-
-nord = ['Emilia-Romagna', 'Lazio', 'Lombardia', 'Piemonte', 'Sicilia', 'Toscana', 'Veneto', 'Campania']
-
-regions['nord'] = regions.regions.isin(nord)
-
-
-regions['treat'] = regions.regions.isin(nord)
-regions['treat'].replace({False: 0, True:1}, inplace = True)
-regions['dist_treat'] = regions.dist + "_treat"
-
-df['nord'] = df.regions.isin(['Emilia-Romagna', 
-'Friuli-Venezia Giulia', 'Liguria', 'Lombardia', 'Piemonte',
-'Trentino-Alto Adige', "Valle d'Aosta", 'Veneto'])
-
-df['centro'] = df.regions.isin(['Toscana', 'Marche', 'Umbria', 'Lazio'])
-
-df['sud'] = df.regions.isin(['Abruzzo', 'Basilicata', 'Calabria', 'Campania', 'Puglia', 'Molise', 'Sicilia', 'Sardegna'])
-
-
-df_copy = df.copy()
-
-df_copy['dist_treat_n'] = df.dist + "_treat_n"
-df_copy['dist_treat_c'] = df.dist + "_treat_c"
-df_copy['dist_treat_s'] = df.dist + "_treat_s"
-df_copy['nord'].replace({False: 0, True:1}, inplace = True)
-df_copy['sud'].replace({False: 0, True:1}, inplace = True)
-df_copy['centro'].replace({False: 0, True:1}, inplace = True)
-  
-
-df_copy['reg_c'] = np.where(df_copy.nord == 1, 1, np.where(df_copy.sud == 1, 2, 0))
-
-df_copy.loc[df_copy.nord == 0, 'dist_treat_n'] = '-7 days_treat_n'
-df_copy.loc[df_copy.sud == 0, 'dist_treat_s'] = '-7 days_treat_s'
-df_copy.loc[df_copy.centro == 0, 'dist_treat_c'] = '-7 days_treat_c'
-df_copy = df_copy.loc[pd.isnull(df_copy.regions) == False]
-# Get the total number of tweets as a control
-df_copy['tot_activity'] = df_copy.groupby(['week_start', 'reg_c']).n_tweets.transform('sum')
-df_reg = pd.concat([df_copy.regions,df_copy['orient_change_toleft'], df_copy.tot_activity, df_copy.week_start, pd.get_dummies(df_copy.dist_treat_n), pd.get_dummies(df_copy.dist_treat_s), pd.get_dummies(df_copy.reg_c, drop_first=True), pd.get_dummies(df_copy.dist)], axis = 1)
-df_reg.drop(columns = ['-7 days_treat_n', '-7 days_treat_s'], inplace = True)
-# Drop the week before COVID-19 happened (i.e. last week of February when first cases appeared)
-df_reg.drop(columns = '-7 days', inplace = True)
-# Define a variable to get the distance column
-dist_col = 'dist'
-# Drop any NAs
-df_reg.dropna(axis = 0, inplace = True)
-# Set users as our index - we will then use it to cluster the standard errors
-df_reg.set_index([df_reg.regions, df_reg.week_start], drop = True, inplace = True)
-df_reg.drop(columns = ['regions', 'week_start'], inplace = True)
-# Create our Matrix of X - by adding a constant and dropping our target column
-
-exog = sm.add_constant(df_reg.drop(columns = 'orient_change_toleft'))
-# Perform our logistic classification
-
-logit_mod = sm.OLS(df_reg['orient_change_toleft'], exog)
-results_logit = logit_mod.fit(cov_type = 'cluster', cov_kwds = {'groups': np.asarray(df_reg.index)})
-# Extract the parameters
-params = results_logit.params
-conf = results_logit.conf_int()
-p_value_stars = ['***' if v <= 0.001 else '**' if v <= 0.01 else '*' if v <= 0.05 else '' for v in list(results_logit.pvalues)]
-conf['Odds Ratio'] = params
-conf['P-Values'] = p_value_stars
-conf.columns = ['5%', '95%', 'Odds Ratio', 'P-Values']
-conf_odds = ['5%', '95%', 'Odds Ratio']
-# Take the exponent of everything to get the Odds-Ratios
-conf = conf[(conf.index.isin(df_copy['dist_treat_s'].unique()))|(conf.index.isin(df_copy['dist_treat_n'].unique()))]
-conf.reset_index(inplace = True, drop = False)
-conf = pd.melt(conf, id_vars = ['index'], value_vars = ['5%', '95%', 'Odds Ratio'])
-conf.columns = [dist_col, 'variable', 'extremism_toright']
-conf['dist_n'] = conf.dist.apply(lambda x: re.sub('_treat_n', "", x)).isin(df.dist.unique())
-conf['dist'] = conf.dist.apply(lambda x: re.sub('_treat_(n|s)', "", x))
-conf = conf.merge(week_list, on = dist_col, how = 'left', indicator = True, validate = 'm:1')
-assert conf._merge.value_counts()['both'] == conf.shape[0]
-sns.lineplot(data = conf, x = 'week_start', y = 'extremism_toright', hue = 'dist_n')
-plt.axhline(0)
-plt.show()
-
-sns.lineplot(data = regions, x = 'week_start', y = 'extremism_toright_p', hue = 'nord')
-
-plt.show()
-
-prova = regions.groupby(['week_start', 'dist', 'nord'], as_index = False).sum()
-for col in iter_dict.keys():
-    prova[f'{col}_p'] = prova[col]/prova['user']
-
-
-sns.lineplot(data = prova, x = 'week_start', y = 'extremism_toright_p', hue = 'nord')
-
-plt.show()
-
-
-store_odds = {}
-df['treat'] = df.regions.isin(nord)
-df['treat'].replace({False: 0, True:1}, inplace = True)
-df['dist_treat'] = df.dist + "_treat"
-y = 'extremism_toright'
-label = 'Extremism to the Right'
-df_fix = df.copy()
-df_fix['regions'] = df_fix['regions'].fillna("")
-store_odds[f"{y}_ols_did_2"] = do_logit(df_fix, y, treat = 3, do_log = False)
-time_plot(store_odds[f"{y}_ols_did_2"], y, "_ols_did_3", y_label = f"{label} (DiD)")
-
-
-prova = do_logit(df, 'far_left', treat = 3, do_log = False, do_monthly=True)
-
-sns.lineplot(data = prova, y = 'far_left', x = 'month')
-plt.axhline(0, color = 'b')
-plt.show()
-
-time_plot(store_odds[f"{y}_ols_did_2"], y, "_ols_did_2", y_label = f"{label} (DiD)")
-
-
 
 
 # Generate a dummy for the most affected regions
