@@ -242,7 +242,8 @@ def double_scatter(df1, df2, col1, col2, col1_name, col2_name, tag = ""):
     spear, _ = spearmanr(df1[col1], df1[col2])
     mod_ols = sm.OLS(df1[col2],df1[col1]).fit()
     fig, ax = plt.subplots(figsize=(15, 10))
-    sns.scatterplot(x=df1[col1], y=df1[col2], ax = ax, s = 100)
+    sns.regplot(x=df1[col1], y=df1[col2], ax = ax, scatter_kws = {"s": 100})
+    sns.despine()
     ax.text(df1[col1].min(), df1[col2].max(), "OLS slope: {:4.3f}, R2: {:4.3f}, Pearsons: {:4.3f}, Spearman: {:4.3f}".format(
                 mod_ols.params[-1], 1-mod_ols.ssr/mod_ols.uncentered_tss, pearson, spear), fontsize = 20)
     plt.yticks(fontsize = 20)
