@@ -78,7 +78,8 @@ try:
         unique_bi = pickle.load(outfile)
     print("Loaded ID dictionary")
 
-    bigram_df = pd.read_csv(f"{path_to_processed}graph_snap{mention_tag}.txt", sep = "\t")
+    bigram_df = pd.read_csv(f"{path_to_processed}graph_snap{mention_tag}.txt", sep = "\t", header = None)
+    bigram_df.columns = ['FromNodeId', 'ToNodeId']
     print("Loaded TXT File")
 except:
     print("Building network file")
@@ -94,7 +95,12 @@ except:
         # Sort by user/weekstart and get the previous polarization
         final_df.sort_values(by = ['scree_name', 'week_start'], inplace = True)
         final_df['old_pol'] = final_df.groupby(['scree_name']).polarization_bin.shift(1)
-
+        # Remove the starting observation
+        final_df = final_df.loc[final_df.old_pol.isna() == False]
+        # Keep only what we need
+        final_df = final_df[['old_pol', 'polarization_bin']]
+        final_df.columns = ['FromNodeId', 'ToNodeId']
+        bigram_df = final_df.copy()
     else:
         # Search for all hashtags
         def get_hashtag(x):
@@ -109,22 +115,21 @@ except:
 
         # Extract only relevant hashtags
         final_df['hashtag'] = final_df.tweet_text.progress_apply(lambda x: get_hashtag(x))
-    
-    # Create also 0/1 for being in a certain group
-    final_df = pd.concat([final_df, pd.get_dummies(final_df.polarization_bin)], axis = 1)
+    if do_switch != True:
+        # Create also 0/1 for being in a certain group
+        final_df = pd.concat([final_df, pd.get_dummies(final_df.polarization_bin)], axis = 1)
 
-    # Add polarization in the list of hashtags to make our network
-    final_df.progress_apply(lambda x: x['hashtag'].append(x['polarization_bin']), axis = 1)
+        # Add polarization in the list of hashtags to make our network
+        final_df.progress_apply(lambda x: x['hashtag'].append(x['polarization_bin']), axis = 1)
 
-    # Create list of lists containing bigrams in tweets
-    terms_bigram = [list(bigrams(tweet)) for tweet in final_df.hashtag if len(tweet) > 1]
+        # Create list of lists containing bigrams in tweets
+        terms_bigram = [list(bigrams(tweet)) for tweet in final_df.hashtag if len(tweet) > 1]
 
-    # Flatten list of bigrams in clean tweets
-    bigram_list = list(itertools.chain(*terms_bigram))
-    bigram_df = pd.DataFrame(bigram_list, columns = ['FromNodeId', 'ToNodeId'])
+        # Flatten list of bigrams in clean tweets
+        bigram_list = list(itertools.chain(*terms_bigram))
+        bigram_df = pd.DataFrame(bigram_list, columns = ['FromNodeId', 'ToNodeId'])
 
     # Convert to IDs
-
     unique_bi = bigram_df.FromNodeId.unique().tolist() + bigram_df.ToNodeId.unique().tolist()
     unique_bi = list(set(unique_bi))
     # Factorize to unique IDs everything
@@ -147,6 +152,19 @@ except:
 
 # Load from our snap-txt file
 G = snap.LoadEdgeList(snap.TUNGraph, f"{path_to_processed}graph_snap{mention_tag}.txt", 0, 1, Separator = "\t")
+
+G = snap.LoadEdgeList(snap.TNEANet, f"{path_to_processed}graph_snap{mention_tag}.txt", 0, 1, Separator = "\t")
+
+G.DrawGViz(snap.gvlDot, "output.png", " ")
+
+
+DegToCntv = snap.TIntPrV()
+snap.GetDegCnt(G, DegToCntv)
+for item in DegToCntv:
+    print("{} nodes with degree {}".format(item.GetVal2(), item.GetVal1()))
+
+snap.PlotInDegDistr(G, "Pol switch", "pol_switch_ind")
+
 # Print some basic informations
 G.PrintInfo("Hashtags", f"hashtag_info{mention_tag}.txt", False)
 # Graph:
@@ -241,3 +259,155 @@ snap.GetNodesAtHop(G, 104705, 1, NodeVec, False)
 
 
 snap.DrawGViz(G, snap.gvlDot, f"G1{mention_tag}.png", "G1")
+
+
+
+
+
+
+
+
+
+
+
+
+import networkx
+
+bigram_df
+unique_bi
+
+bigram_df.groupby(['FromNodeId', 'ToNodeId']).count()
+
+for k1, v1 in unique_bi.items():
+    for k2, v2 in unique_bi.items():
+
+
+G_weighted = nx.Graph()
+
+G_weighted.add_edge('Amitabh Bachchan','Abhishek Bachchan', weight=25)
+
+
+
+G = nx.Graph()
+
+for k1, v1 in unique_bi.items():
+    G.add_node(k1)
+
+nx.draw(G, with_labels = True, font_color = 'white', node_shape='s')
+
+def show_graph(G):
+    nx.draw(G, with_labels = True, node_shape = 's')
+    plt.show()
+
+show_graph(G)
+
+import matplotlib.pyplot as plt
+
+
+
+G = nx.DiGraph()
+
+for k1, v1 in unique_bi.items():
+    G.add_node(k1)
+
+for k1, v1 in unique_bi.items():
+    for k2, v2 in unique_bi.items():
+        G.add_edge(k1, k2, weight = bigram_df.loc[(bigram_df.FromNodeId == v1)&(bigram_df.ToNodeId == v2)].shape[0])
+
+show_graph(G)
+
+plt.figure()    
+pos = nx.spring_layout(G)
+weight_labels = nx.get_edge_attributes(G,'weight')
+weights = nx.get_edge_attributes(G,'weight').values()
+nx.draw(G,pos, node_shape = 's', with_labels = True, width=list(weights))
+nx.draw_networkx_edge_labels(G,pos,edge_labels=weight_labels)
+plt.show()
+
+
+k1
+k2
+
+bigram_df.loc[(bigram_df.FromNodeId == v1)&(bigram_df.ToNodeId == v2)].shape[0]
+
+
+labels = {}    
+for node in G.nodes():
+    if node in hubs:
+        #set the node name as the key and the label as its value 
+        labels[node] = node
+#set the argument 'with labels' to False so you have unlabeled graph
+nx.draw(G, with_labels=False)
+#Now only add labels to the nodes you require (the hubs in my case)
+nx.draw_networkx_labels(G,pos,labels,font_size=16,font_color='r')
+
+
+
+
+G = nx.DiGraph()
+
+for k1, v1 in unique_bi.items():
+    G.add_node(v1)
+
+for k1, v1 in unique_bi.items():
+    for k2, v2 in unique_bi.items():
+        G.add_edge(v1, v2, weight = bigram_df.loc[(bigram_df.FromNodeId == v1)&(bigram_df.ToNodeId == v2)].shape[0])
+
+
+
+
+G=nx.from_pandas_edgelist(bigram_df, 'FromNodeId', 'ToNodeId', create_using = nx.DiGraph)
+
+
+
+hubs = [v1 for k1, v1 in unique_bi.items() if k1 in ['far_right', 'far_left', 'center', 'center_right', 'center_left']]
+
+labels = {}    
+for node in G.nodes():
+    if node in hubs:
+        #set the node name as the key and the label as its value 
+        labels[node] = node
+#set the argument 'with labels' to False so you have unlabeled graph
+nx.draw(G, with_labels=False)
+#Now only add labels to the nodes you require (the hubs in my case)
+nx.draw_networkx_labels(G,pos,labels,font_size=16,font_color='r')
+
+
+
+#### SIMPLE POLARIZATION NETWORK --------------------------------------
+
+
+
+G=nx.from_pandas_edgelist(bigram_df, 'FromNodeId', 'ToNodeId', create_using = nx.DiGraph)
+
+# Plot the graph
+hubs = {v1:k1 for k1, v1 in unique_bi.items() if k1 in ['far_right', 'far_left', 'center', 'center_right', 'center_left']}
+
+labels = {}    
+for node in G.nodes():
+    if node in hubs.values():
+        #set the node name as the key and the label as its value 
+        labels[node] = 
+#set the argument 'with labels' to False so you have unlabeled graph
+nx.draw(G, with_labels=False)
+#Now only add labels to the nodes you require (the hubs in my case)
+nx.draw_networkx_labels(G,pos,labels,font_size=16,font_color='r')
+
+
+import matplotlib.pyplot as plt
+
+
+plt.figure()    
+pos = nx.spring_layout(G)
+weight_labels = nx.get_edge_attributes(G,'weight')
+nx.draw(G,pos, node_shape = 's', with_labels = False)
+#Now only add labels to the nodes you require (the hubs in my case)
+nx.draw_networkx_labels(G,pos,hubs,font_size=16,font_color='r')
+nx.draw_networkx_edge_labels(G,pos,edge_labels=weight_labels)
+plt.show()
+
+
+pos = nx.spring_layout(G)
+weight_labels = nx.get_edge_attributes(G,'weight')
+nx.draw(G,pos, node_shape = 's', with_labels = True,)
+nx.draw_networkx_edge_labels(G,pos,edge_labels=weight_labels)
