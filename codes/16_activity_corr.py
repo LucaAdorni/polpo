@@ -22,7 +22,9 @@ import statsmodels.formula.api as smf
 from scipy.stats import pearsonr, spearmanr
 from statsmodels.tsa.seasonal import STL
 import networkx as nx
+from tqdm import tqdm
 
+tqdm.pandas()
 
 import sys
 sys.path.append("/Users/ADORNI/Documents/graph-tool/src")
@@ -64,15 +66,14 @@ os.makedirs(path_to_figures_corr, exist_ok = True)
 # 1. LOAD DATASET ------------------------------------
 
 
-df = pd.read_pickle(f"{path_to_processed}final_df_clean.pkl.gz", compression = 'gzip')
-df = df.loc[(df.week_start <= pd.datetime(2020, 12, 31))&(df.week_start >= pd.datetime(2020, 2, 24))]
-df.drop(columns = 'tweet_text', inplace = True)
 
-# Categorize user activity for their sentiment
-df['main_emo'] = df[['anger', 'fear', 'joy', 'sadness']].idxmax(axis = 1)
-
-
-# PARAMETERS -----
+# PARAMETERS ---------
+stem = True
+stem_tag = np.where(stem, "_stemm","")
+# If do_mentions = True, extract mentions instead of hashtags
+do_mentions = False
+# Set to True if we want to count just once a tweet if a hashtag appears, otherwise count the number of hashtag appearances
+count_hash_app = False
 # Set to True if we want to check the correlation in n. of tweets
 pol_activity = False
 # PARAMETER: Correlation method
@@ -85,8 +86,8 @@ seasonal = 7
 def build_heatmap():
     # Plot a heatmap of all the correlation coefficients
     fig, ax = plt.subplots(1,1, figsize=(8,6))
-    colormap = plt.cm.get_cmap('bwr_r') # 'plasma' or 'viridis'
-    plt.pcolor(corr_matrix, cmap = colormap, vmin = -1, vmax = 1)
+    colormap = plt.cm.get_cmap('Blues') # 'plasma' or 'viridis'
+    plt.pcolor(corr_matrix, cmap = colormap, vmin = 0, vmax = 1)
     plt.colorbar(cmap = colormap)
     ax = plt.gca()
     ax.set_xticks(np.arange(corr_matrix.shape[0])+0.5)
@@ -115,6 +116,9 @@ def build_resid(period = 44, seasonal = 5):
     else:
         corr_df = df.groupby(['week_start', 'polarization_bin'], as_index = False).scree_name.count()
         corr_df = corr_df.pivot(columns = ['polarization_bin'], index = 'week_start', values = 'scree_name')
+    hashtag_df = final_df.groupby(['week_start'], as_index = True)[[k for k in hash_dict.keys()]].sum()
+
+    corr_df = pd.concat([corr_df, hashtag_df], axis = 1)
 
     # Use STL to detrend/deseasonalize all our observations
     store = pd.DataFrame()
@@ -123,18 +127,120 @@ def build_resid(period = 44, seasonal = 5):
         res = stl.fit()
         store[col] = res.resid
     # Fix order of index
-    store = store.T.reindex(['far_left', 'center_left', 'center', 'center_right', 'far_right']).T
+    store = store.T.reindex(['far_left', 'center_left', 'center', 'center_right', 'far_right', 'anti-gov', 'pro-lock', 'china', 'immuni',
+                             'conspiracy', 'novax', 'migrants', 'fake-news',
+                             ]).T
 
     return store
+
+
+# Load User/Polarization dataset
+df = pd.read_pickle(f"{path_to_processed}final_df_clean.pkl.gz", compression = 'gzip')
+df = df.loc[(df.week_start <= pd.datetime(2020, 12, 31))&(df.week_start >= pd.datetime(2020, 2, 24))]
+df.drop(columns = 'tweet_text', inplace = True)
+
+# Categorize user activity for their sentiment
+df['main_emo'] = df[['anger', 'fear', 'joy', 'sadness']].idxmax(axis = 1)
+
+# Load our main dataset
+final_df = pd.read_pickle(f"{path_to_processed}cleaned_gsdmm_tweets{stem_tag}.pkl.gz", compression = 'gzip')
+# Restrict the time
+final_df = final_df.loc[(final_df.week_start <= pd.datetime(2020, 12, 31))&(final_df.week_start >= pd.datetime(2020, 2, 24))]
+
+# Search for all hashtags
+def get_hashtag(x):
+    # Lowercase everything
+    x = x.lower()
+    # We first remove any trace of covid
+    x = re.sub('(coronavirus|covid19|covid-19|covid19italia|coronavid19|pandemia|corona|virus|covid|covid_19)', '', x)  # remove hash tags
+    if do_mentions:
+        return re.findall("@[A-Za-z]+[A-Za-z0-9-_]+", x)
+    else:
+        return re.findall("#[A-Za-z]+[A-Za-z0-9-_]+",x)
+
+# Extract only relevant hashtags
+final_df['hashtag'] = final_df.tweet_text.progress_apply(lambda x: get_hashtag(x))
+
+# Get the top hashtags
+hashtags = final_df.hashtag.tolist()
+
+# Flatten it
+hashtags = [l for lis in hashtags for l in lis]
+hashtags = pd.DataFrame(hashtags, columns = ['hashtags'])
+
+# Group hashtags per topics
+hash_dict = {'anti-gov': [h for h in  hashtags.hashtags.unique().tolist() if 
+                            (re.search("governo|conte|speranza|pd|m5s", h) 
+                            and re.search("criminal|vergogn|dimettit|irresp|merd|infam", h)) 
+                            or (re.search("pdiot|pidiot", h)) or (re.search("dittatura", h))],
+             'pro-lock': [h for h in  hashtags.hashtags.unique().tolist() if (re.search("casa", h) 
+                            and re.search("stare|sto|stiamo|resto|restare|restiamo|rimanere|rimango|rimaniamo", h) 
+                            and re.search("cazzo|non|rotto|odio|accidenti|beata|nn|c4zz0|mah", h) == None) 
+                            or (re.search("andra|andare", h) 
+                            and re.search("bene", h) and re.search("sega|cazzo|non|accidenti|beata|nn|c4zz0|mah", h) == None)
+                            or (re.search("uniti", h) and (re.search("distanti|restiamo|restare", h)))],
+             'immuni': [h for h in  hashtags.hashtags.unique().tolist() if (re.search("immuni", h)
+                    and re.search("immuniz|immunit", h) == None)
+                    or (re.search('privacy|tracing|tracciamento', h))],
+             'china': ['#cina', '#wuhan', '#china', '#cinesi', '#cinese', '#chinese']+[h for h in  hashtags.hashtags.unique().tolist() if re.search("wuhan", h)],
+             'fake-news': [h for h in  hashtags.hashtags.unique().tolist() if re.search("fakenew(s)|disinformazione|infodemia", h)],
+             'conspiracy': [h for h in  hashtags.hashtags.unique().tolist() if re.search("gates|soros", h)],
+             'novax': [h for h in  hashtags.hashtags.unique().tolist() if re.search("novax|negazionisti|novaccino|no-vax|antivax|stopvax", h)],
+             'migrants':[h for h in  hashtags.hashtags.unique().tolist() if re.search("migranti|migrante|immigra|porti|lampedusa|rom", h) and re.search("aereoporti|trasporti|sport|portici|support|export|interporti|aperti", h) == None]}
+
+# ANTI PROVA
+
+[h for h in  hashtags.hashtags.unique().tolist() if (re.search("cyber", h))]
+
+# TO-DO:
+# Anti-Gov
+# Vaccines?
+# Other hashtags?
+
+
+# TO DO:
+# - FakeNews was correlated with leftist, check again what went wrong
+# 
+
+
+# Now flag all the tweets with at least one of those hashtags
+for col, v in hash_dict.items():
+    if count_hash_app:
+        final_df[col] = final_df.hashtag.progress_apply(lambda x: bool(set(x) & set(v))).astype(int)
+    else:
+        final_df[col] = final_df.hashtag.progress_apply(lambda x: sum(el in x for el in v))
+
+
+# Now flag all the tweets with at least one of those hashtags
+for col, v in hash_dict.items():
+    final_df[col] = final_df.hashtag.progress_apply(lambda x: sum(el in x for el in v))
+    col = 'novax'
+    v = [h for h in  hashtags.hashtags.unique().tolist() if 
+                            (re.search("governo|conte|speranza|pd|m5s", h) 
+                            and re.search("criminal|vergogn|dimettit|irresp|merd|infam", h)
+                            and re.search("non", h) == None) 
+                            or (re.search("pdiot|pidiot", h)) or (re.search("dittatura", h))]
+    
+
+    v = v  + [h for h in  hashtags.hashtags.unique().tolist() if (re.search("casa", h) 
+                and re.search("stare|sto|stiamo|resto|restare|restiamo|rimanere|rimango|rimaniamo", h) 
+                and re.search("cazzo|non|rotto|odio|accidenti|beata|nn|c4zz0|mah", h)) 
+                or (re.search("andra|andare", h) 
+                and re.search("bene", h) and re.search("sega|cazzo|non|accidenti|beata|nn|c4zz0|mah", h))]
+    final_df[col] = final_df.hashtag.progress_apply(lambda x: sum(el in x for el in v))
+    final_df[col] = final_df.hashtag.progress_apply(lambda x: bool(set(x) & set(v))).astype(int)
+
+
+
 
 
 # Build our dataset
 store = build_resid(period, seasonal)
 # Build a pearson correlation matrix
 corr_matrix = store.corr(method = method)
+corr_matrix
 build_heatmap()
 save_fig(f"{path_to_figures_corr}pol_act_heatmap")
-corr_matrix
 
 
 # Threshold to plot correlations
@@ -155,8 +261,6 @@ G = nx.Graph()
 for edge in edge_list:
     G.add_edge(edge[0], edge[1], weight=edge[2])
 
-# positions for all nodes - seed for reproducibility
-pos = nx.spring_layout(G, seed=42) 
 
 # elarge = [(u, v) for (u, v, d) in G.edges(data=True) if d["weight"] > 0.49]
 
@@ -178,11 +282,16 @@ plt.show()
 
 
 # Define a dictionary of labels
-label_dict = {'far_right': "Far Right", 'far_left':'Far Left', 'center_left': 'Center Left', 'center': 'Center', 'center_right': 'Center Right'}
+label_dict = {'far_right': "Far Right", 'far_left':'Far Left', 'center_left': 'Center Left',
+            'center': 'Center', 'center_right': 'Center Right', 'anti-gov': "Anti-Gov",
+            'china': "China", 'immuni': 'Immuni', 'fake-news':'Fake-News', 'pro-lock': 'Pro-Lock'}
 
 
 fig, ax = plt.subplots(1,1, figsize=(8,6))
-pos = nx.nx_agraph.graphviz_layout(G, 'neato', root = 42)
+
+# positions for all nodes - seed for reproducibility
+pos = nx.spring_layout(G, seed=42) 
+# pos = nx.nx_agraph.graphviz_layout(G, 'neato', root = 42)
 # node labels
 nx.draw_networkx_labels(G, pos, labels = label_dict, font_size=20, font_family="sans-serif")
 # Set options to get colored edges
@@ -198,4 +307,5 @@ ax = plt.gca()
 ax.margins(0.08)
 plt.axis("off")
 plt.tight_layout()
+save_fig(f"{path_to_figures_corr}pol_act_netw")
 plt.show()
