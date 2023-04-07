@@ -171,7 +171,7 @@ hashtags = pd.DataFrame(hashtags, columns = ['hashtags'])
 # Group hashtags per topics
 hash_dict = {'anti-gov': [h for h in  hashtags.hashtags.unique().tolist() if 
                             (re.search("governo|conte|speranza|pd|m5s", h) 
-                            and re.search("criminal|vergogn|dimettit|irresp|merd|infam", h)) 
+                            and re.search("criminal|vergogn|dimett|irresp|merd|infam|acasa|cazzo|c4zz0", h)) 
                             or (re.search("pdiot|pidiot", h)) or (re.search("dittatura", h))],
              'pro-lock': [h for h in  hashtags.hashtags.unique().tolist() if (re.search("casa", h) 
                             and re.search("stare|sto|stiamo|resto|restare|restiamo|rimanere|rimango|rimaniamo", h) 
@@ -185,12 +185,20 @@ hash_dict = {'anti-gov': [h for h in  hashtags.hashtags.unique().tolist() if
              'china': ['#cina', '#wuhan', '#china', '#cinesi', '#cinese', '#chinese']+[h for h in  hashtags.hashtags.unique().tolist() if re.search("wuhan", h)],
              'fake-news': [h for h in  hashtags.hashtags.unique().tolist() if re.search("fakenew(s)|disinformazione|infodemia", h)],
              'conspiracy': [h for h in  hashtags.hashtags.unique().tolist() if re.search("gates|soros", h)],
-             'novax': [h for h in  hashtags.hashtags.unique().tolist() if re.search("novax|negazionisti|novaccino|no-vax|antivax|stopvax", h)],
-             'migrants':[h for h in  hashtags.hashtags.unique().tolist() if re.search("migranti|migrante|immigra|porti|lampedusa|rom", h) and re.search("aereoporti|trasporti|sport|portici|support|export|interporti|aperti", h) == None]}
+             'novax': [h for h in  hashtags.hashtags.unique().tolist() if (re.search("vaccin|pfizer|biontech|astrazeneca|vax", h) 
+                                                                        and re.search("mai|fraud|stop|follia|killer|lobby", h))
+                                                                        or (re.search("novaccin|noalvaccin", h))
+                                                                        or (re.search("novax|antivax|no-vax", h))],
+             'migrants':[h for h in  hashtags.hashtags.unique().tolist() if (re.search("porto|porti", h) and re.search("chiud|chius", h))
+                                                        or (re.search('migrant|immigra|lampedusa|lamorgese|extracomunit|barcon|sbarc|clandestin', h))]
+}
+                         
+                         
+                         
+                        
 
-# ANTI PROVA
 
-[h for h in  hashtags.hashtags.unique().tolist() if (re.search("cyber", h))]
+
 
 # TO-DO:
 # Anti-Gov
@@ -214,13 +222,9 @@ for col, v in hash_dict.items():
 # Now flag all the tweets with at least one of those hashtags
 for col, v in hash_dict.items():
     final_df[col] = final_df.hashtag.progress_apply(lambda x: sum(el in x for el in v))
-    col = 'novax'
-    v = [h for h in  hashtags.hashtags.unique().tolist() if 
-                            (re.search("governo|conte|speranza|pd|m5s", h) 
-                            and re.search("criminal|vergogn|dimettit|irresp|merd|infam", h)
-                            and re.search("non", h) == None) 
-                            or (re.search("pdiot|pidiot", h)) or (re.search("dittatura", h))]
-    
+    col = 'migrants'
+    v = [h for h in  hashtags.hashtags.unique().tolist() if (re.search("porto|porti", h) and re.search("chiud|chius", h))
+                                                        or (re.search('migrant|immigra|lampedusa|lamorgese|extracomunit|barcon|sbarc|clandestin', h))]
 
     v = v  + [h for h in  hashtags.hashtags.unique().tolist() if (re.search("casa", h) 
                 and re.search("stare|sto|stiamo|resto|restare|restiamo|rimanere|rimango|rimaniamo", h) 
@@ -241,7 +245,7 @@ corr_matrix = store.corr(method = method)
 corr_matrix
 build_heatmap()
 save_fig(f"{path_to_figures_corr}pol_act_heatmap")
-
+plt.show()
 
 # Threshold to plot correlations
 threshold = 0.49
