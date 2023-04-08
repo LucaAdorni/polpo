@@ -127,7 +127,8 @@ def build_resid(period = 44, seasonal = 5):
         res = stl.fit()
         store[col] = res.resid
     # Fix order of index
-    store = store.T.reindex(['far_left', 'center_left', 'center', 'center_right', 'far_right', 'anti-gov', 'pro-lock', 'china', 'immuni',
+    store = store.T.reindex(['far_left', 'center_left', 'center', 'center_right', 'far_right', 
+                             'anti-gov', 'immuni', 'lombardia', 'pro-lock',
                              'conspiracy', 'novax', 'migrants', 'fake-news',
                              ]).T
 
@@ -170,7 +171,7 @@ hashtags = pd.DataFrame(hashtags, columns = ['hashtags'])
 
 # Group hashtags per topics
 hash_dict = {'anti-gov': [h for h in  hashtags.hashtags.unique().tolist() if 
-                            (re.search("governo|conte|speranza|pd|m5s", h) 
+                            (re.search("governo|conte|speranza|pd|m5s|euro|ue|eu", h) 
                             and re.search("criminal|vergogn|dimett|irresp|merd|infam|acasa|cazzo|c4zz0", h)) 
                             or (re.search("pdiot|pidiot", h)) or (re.search("dittatura", h))],
              'pro-lock': [h for h in  hashtags.hashtags.unique().tolist() if (re.search("casa", h) 
@@ -182,9 +183,10 @@ hash_dict = {'anti-gov': [h for h in  hashtags.hashtags.unique().tolist() if
              'immuni': [h for h in  hashtags.hashtags.unique().tolist() if (re.search("immuni", h)
                     and re.search("immuniz|immunit", h) == None)
                     or (re.search('privacy|tracing|tracciamento', h))],
-             'china': ['#cina', '#wuhan', '#china', '#cinesi', '#cinese', '#chinese']+[h for h in  hashtags.hashtags.unique().tolist() if re.search("wuhan", h)],
+             'lombardia': [h for h in  hashtags.hashtags.unique().tolist() if re.search("lombardia|fontana|gallera", h)],
              'fake-news': [h for h in  hashtags.hashtags.unique().tolist() if re.search("fakenew(s)|disinformazione|infodemia", h)],
-             'conspiracy': [h for h in  hashtags.hashtags.unique().tolist() if re.search("gates|soros", h)],
+             'conspiracy': [h for h in  hashtags.hashtags.unique().tolist() if (re.search("gates|soros|truffa|pipistrell|conspiracy|lobby|wuhanfile|terror", h))
+                                                        or (re.search("biologic", h) and re.search("arma|warfare", h))],
              'novax': [h for h in  hashtags.hashtags.unique().tolist() if (re.search("vaccin|pfizer|biontech|astrazeneca|vax", h) 
                                                                         and re.search("mai|fraud|stop|follia|killer|lobby", h))
                                                                         or (re.search("novaccin|noalvaccin", h))
@@ -192,21 +194,19 @@ hash_dict = {'anti-gov': [h for h in  hashtags.hashtags.unique().tolist() if
              'migrants':[h for h in  hashtags.hashtags.unique().tolist() if (re.search("porto|porti", h) and re.search("chiud|chius", h))
                                                         or (re.search('migrant|immigra|lampedusa|lamorgese|extracomunit|barcon|sbarc|clandestin', h))]
 }
-                         
-                         
-                         
-                        
+  
 
+[h for h in  hashtags.hashtags.unique().tolist() if re.search("deepstate|microchip|gates|soros|illuminati|idrossiclo|pipistrell", h)]  
 
+[h for h in  hashtags.hashtags.unique().tolist() if re.search("vaccin|pfizer|biontech|astrazeneca|vax", h)]  
 
+[h for h in  hashtags.hashtags.unique().tolist() if (re.search("attilio", h))]  
 
+[h for h in  hashtags.hashtags.unique().tolist() if (re.search("fornitura", h) and re.search("camic", h))]  
 # TO-DO:
 # Anti-Gov
 # Vaccines?
 # Other hashtags?
-
-
-# TO DO:
 # - FakeNews was correlated with leftist, check again what went wrong
 # 
 
@@ -218,21 +218,30 @@ for col, v in hash_dict.items():
     else:
         final_df[col] = final_df.hashtag.progress_apply(lambda x: sum(el in x for el in v))
 
+col = 'lombardia'
+v = [h for h in  hashtags.hashtags.unique().tolist() if (re.search("lombardia|fontana|gallera", h)
+                                                         or (re.search("fornitura", h) and re.search("camic", h)))]
 
-# Now flag all the tweets with at least one of those hashtags
-for col, v in hash_dict.items():
-    final_df[col] = final_df.hashtag.progress_apply(lambda x: sum(el in x for el in v))
-    col = 'migrants'
-    v = [h for h in  hashtags.hashtags.unique().tolist() if (re.search("porto|porti", h) and re.search("chiud|chius", h))
-                                                        or (re.search('migrant|immigra|lampedusa|lamorgese|extracomunit|barcon|sbarc|clandestin', h))]
+v = v + [h for h in  hashtags.hashtags.unique().tolist() if (re.search("vaccin|pfizer|biontech|astrazeneca|vax", h) 
+                                                                        and re.search("mai|fraud|stop|follia|killer|lobby", h))
+                                                                        or (re.search("novaccin|noalvaccin", h))
+                                                                        or (re.search("novax|antivax|no-vax", h))]
 
-    v = v  + [h for h in  hashtags.hashtags.unique().tolist() if (re.search("casa", h) 
-                and re.search("stare|sto|stiamo|resto|restare|restiamo|rimanere|rimango|rimaniamo", h) 
-                and re.search("cazzo|non|rotto|odio|accidenti|beata|nn|c4zz0|mah", h)) 
-                or (re.search("andra|andare", h) 
-                and re.search("bene", h) and re.search("sega|cazzo|non|accidenti|beata|nn|c4zz0|mah", h))]
-    final_df[col] = final_df.hashtag.progress_apply(lambda x: sum(el in x for el in v))
-    final_df[col] = final_df.hashtag.progress_apply(lambda x: bool(set(x) & set(v))).astype(int)
+# # Now flag all the tweets with at least one of those hashtags
+# for col, v in hash_dict.items():
+#     final_df[col] = final_df.hashtag.progress_apply(lambda x: sum(el in x for el in v))
+#     col = 'novax'
+#     v = [h for h in  hashtags.hashtags.unique().tolist() if 
+#                             (re.search("governo|conte|speranza|pd|m5s|euro|#ue|#eu|eu$", h) 
+#                             and re.search("criminal|vergogn|dimett|irresp|merd|infam|acasa|cazzo|c4zz0", h)) 
+#                             or (re.search("pdiot|pidiot", h)) or (re.search("dittatura", h))]
+#     v = v  + [h for h in  hashtags.hashtags.unique().tolist() if (re.search("casa", h) 
+#                 and re.search("stare|sto|stiamo|resto|restare|restiamo|rimanere|rimango|rimaniamo", h) 
+#                 and re.search("cazzo|non|rotto|odio|accidenti|beata|nn|c4zz0|mah", h)) 
+#                 or (re.search("andra|andare", h) 
+#                 and re.search("bene", h) and re.search("sega|cazzo|non|accidenti|beata|nn|c4zz0|mah", h))]
+#     final_df[col] = final_df.hashtag.progress_apply(lambda x: sum(el in x for el in v))
+#     final_df[col] = final_df.hashtag.progress_apply(lambda x: bool(set(x) & set(v))).astype(int)
 
 
 
@@ -247,6 +256,12 @@ build_heatmap()
 save_fig(f"{path_to_figures_corr}pol_act_heatmap")
 plt.show()
 
+# Export to LaTex the correlation table
+corr_matrix.to_latex(f"{path_to_figures_corr}table_a6_corr_table.tex", header = True, index = True)
+
+# Save it also as a pickle
+corr_matrix.to_pickle(f"{path_to_figures_corr}corr_matrix.pkl.gz", compression = 'gzip')
+
 # Threshold to plot correlations
 threshold = 0.49
 
@@ -254,7 +269,7 @@ threshold = 0.49
 edge_list = []
 for i in corr_matrix.index:
         for j in corr_matrix.columns:
-            if corr_matrix.loc[i,j] > threshold and i != j:
+            if round(corr_matrix.loc[i,j],2) >= threshold and i != j:
                 edge_list.append((j,i,corr_matrix.loc[i,j]))
 
 
@@ -286,9 +301,10 @@ plt.show()
 
 
 # Define a dictionary of labels
-label_dict = {'far_right': "Far Right", 'far_left':'Far Left', 'center_left': 'Center Left',
+label_dict = {'far_right': "Far Right", 'far_left':'Far Left', 
+              'center_left': 'Center Left',
             'center': 'Center', 'center_right': 'Center Right', 'anti-gov': "Anti-Gov",
-            'china': "China", 'immuni': 'Immuni', 'fake-news':'Fake-News', 'pro-lock': 'Pro-Lock'}
+            'lombardia': "Lombardia", 'immuni': 'Immuni', 'fake-news':'Fake-News', 'pro-lock': 'Pro-Lock'}
 
 
 fig, ax = plt.subplots(1,1, figsize=(8,6))
@@ -297,14 +313,14 @@ fig, ax = plt.subplots(1,1, figsize=(8,6))
 pos = nx.spring_layout(G, seed=42) 
 # pos = nx.nx_agraph.graphviz_layout(G, 'neato', root = 42)
 # node labels
-nx.draw_networkx_labels(G, pos, labels = label_dict, font_size=20, font_family="sans-serif")
+nx.draw_networkx_labels(G, pos, labels = False, font_size=20, font_family="sans-serif")
 # Set options to get colored edges
 options = {
     "node_color": "#A0CBE2",
     "edge_color": [d['weight'] for (u, v, d) in G.edges(data=True)],
     "width": 4,
     "edge_cmap": plt.cm.Blues,
-    "with_labels": False,
+    "with_labels": True,
 }
 nx.draw(G, pos, **options)
 ax = plt.gca()
