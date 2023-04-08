@@ -256,6 +256,8 @@ balanced_panel.columns = uid
 # Bring everything to long format and merge it back
 balanced_panel = pd.melt(balanced_panel, var_name = 'macro', value_name = 'week_start')
 rebalanced_data = pd.merge(balanced_panel, plot_df, how='left', on=['macro', 'week_start']).fillna(0)
+# Smooth the series using MA(2)
+rebalanced_data['n_obs'] = rebalanced_data.groupby(['macro'], as_index = False).n_obs.transform(lambda x: x.rolling(window = 3).mean())
 
 # Plot over time the macro-topics
 fig, ax = plt.subplots(figsize=(15, 10))
@@ -379,6 +381,8 @@ balanced_panel.columns = uid
 # Bring everything to long format and merge it back
 balanced_panel = pd.melt(balanced_panel, var_name = 'macro', value_name = 'week_start')
 rebalanced_data = pd.merge(balanced_panel, plot_df, how='left', on=['macro', 'week_start']).fillna(0)
+# Smooth the series using MA(2)
+rebalanced_data['n_obs'] = rebalanced_data.groupby(['macro'], as_index = False).n_obs.transform(lambda x: x.rolling(window = 3).mean())
 
 # Plot over time the macro-topics
 fig, ax = plt.subplots(figsize=(15, 10))
