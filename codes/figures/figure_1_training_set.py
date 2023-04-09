@@ -51,7 +51,7 @@ training = pd.read_pickle(f"{path_to_data}processed/training.pkl.gz", compressio
 def save_fig(fig_id, tight_layout=True):
     # The path of the figures folder ./Figures/fig_id.png (fig_id is a variable that you specify 
     # when you call the function)
-    path = os.path.join(os.getcwd(), "Figures", fig_id + ".png") 
+    path = os.path.join(fig_id + ".pdf") 
     print("Saving figure", fig_id)
     if tight_layout:
         plt.tight_layout()
@@ -70,7 +70,7 @@ plt.xlabel('Polarization Score', fontsize = 25)
 plt.yticks(fontsize = 20)
 plt.xticks(fontsize = 20)
 plt.axvline(0, linewidth = 1, alpha = 0.9, color='r', linestyle = '--')
-save_fig(f'{path_to_figures}figure_1a_training_set_hist')
+save_fig(f'{path_to_figures}final/fig_1a_training_set_hist')
 
 
 # POLARIZATION OVER TIME -----------------------
@@ -84,4 +84,4 @@ plt.ylabel('Political Score', fontsize = 25)
 plt.xlabel('Weeks', fontsize = 25)
 plt.yticks(fontsize = 20)
 plt.xticks(fontsize = 20)
-save_fig(f'{path_to_figures}figure_1b_training_set_weekly')
+save_fig(f'{path_to_figures}final/fig_1b_training_set_weekly')

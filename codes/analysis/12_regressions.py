@@ -433,6 +433,11 @@ for y in iter_emot:
     time_plot(conf, y, "_did", y_label = f"{y.capitalize()} (DiD)")
     store_odds[f"{y}_did"] = conf
 
+# Save all the stored results
+
+with open(f'{path_to_processed}regression_res.pkl', 'wb') as f:
+    pickle.dump(store_odds, f)
+
 for y, v in iter_dict.items():
     for emo in iter_emot:
         double_lineplot(store_odds[f'{y}_ols'], store_odds[emo], col1 = y, col2 = emo, col1_name= v, col2_name = emo.capitalize(), label_1 = v, label_2 = emo.capitalize(), tag="_ols")

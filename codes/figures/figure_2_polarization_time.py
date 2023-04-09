@@ -50,7 +50,7 @@ path_to_tables = f"{path_to_repo}tables/"
 def save_fig(fig_id, tight_layout=True):
     # The path of the figures folder ./Figures/fig_id.png (fig_id is a variable that you specify 
     # when you call the function)
-    path = os.path.join(os.getcwd(), "Figures", fig_id + ".pdf") 
+    path = os.path.join(fig_id + ".pdf") 
     print("Saving figure", fig_id)
     if tight_layout:
         plt.tight_layout()
@@ -67,26 +67,27 @@ df['min_date'] = df.groupby('scree_name').week_start.transform('min')
 df['max_date'] = df.groupby('scree_name').week_start.transform('max')
 df['check'] = (df.min_date <= pd.datetime(2020, 2, 18))& (df.max_date >= pd.datetime(2020, 2, 18))
 
-df_plot = df.loc[df.check].groupby('week_start').prediction.mean()
+df_plot = df.loc[df.check].groupby('week_start').pred.mean()
 df_plot = pd.DataFrame(df_plot)
 df_plot = df_plot.loc[df_plot.index < dt.datetime(2021, 1,1)]
 
 # lineplot for political score
 fig, ax = plt.subplots(figsize=(15, 10))
-sns.lineplot(x = 'week_start', y = 'prediction', data = df_plot, ax = ax)
+sns.lineplot(x = 'week_start', y = 'pred', data = df_plot, ax = ax)
 sns.despine()
 plt.ylabel('Political Score')
 plt.xlabel('Weeks')
-max_value = df_plot["prediction"].max() - df_plot["prediction"].max()*0.001
+max_value = df_plot["pred"].max() - df_plot["pred"].max()*0.001
 pandemic = pd.datetime(2020, 2, 24)
 plt.axvline(pandemic, linewidth = 1, alpha = 1, color = 'red', linestyle = '--')
 
 annotation_dict = {
     "(1)": (2020, 3, 9)
-    , '(2)': (2020, 5, 6)
+    , '(2)': (2020, 5, 4)
     , '(3)': (2020, 6, 15)
-    , '(4)': (2020, 8, 17)
-
+    , '(4)': (2020, 8, 10)
+    , '(5)': (2020, 10, 12)
+    , '(6)': (2020, 11, 2)
 }
 
 for key, value in annotation_dict.items():
@@ -100,4 +101,4 @@ for key, value in annotation_dict.items():
     plt.axvline(week_date,linewidth=1.5, alpha = 0.7, color='dimgrey', linestyle = '-.')
     ax.text(week_date2, max_value, key, fontsize = 20, alpha = 0.7)
 
-save_fig(f'{path_to_figures}figure_2_polarization_time')
+save_fig(f'{path_to_figures}final/fig_2_polarization_time')

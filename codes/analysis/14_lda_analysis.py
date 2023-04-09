@@ -53,14 +53,10 @@ path_to_processed = f"{path_to_data}processed/"
 path_to_figures = f"{path_to_repo}figures/"
 path_to_figure_odds = f"{path_to_figures}logit_res/"
 path_to_tables = f"{path_to_repo}tables/"
-path_to_ctm = f"{path_to_data}ctm/"
-path_to_lda = f"{path_to_data}lda/"
 path_to_sk_lda = f"{path_to_data}sk_lda/"
+path_to_figures_final = f"{path_to_figures}final/"
 
-os.makedirs(path_to_ctm, exist_ok=True)
-os.makedirs(path_to_lda, exist_ok=True)
 os.makedirs(path_to_sk_lda, exist_ok=True)
-os.makedirs(f"{path_to_sk_lda}clean/", exist_ok=True)
 
 # 1. Load our dataset --------------------------------------------
 
@@ -136,7 +132,7 @@ def top_tweets(model, topic_dct, feature_names, no_top_words):
 def save_fig(fig_id, tight_layout=True):
     # The path of the figures folder ./Figures/fig_id.png (fig_id is a variable that you specify 
     # when you call the function)
-    path = os.path.join(os.getcwd(), "Figures", fig_id + ".pdf") 
+    path = os.path.join(fig_id + ".pdf") 
     print("Saving figure", fig_id)
     if tight_layout:
         plt.tight_layout()
@@ -274,9 +270,7 @@ plt.ylim(0,1)
 ax.xaxis.set_major_formatter(
     mdates.ConciseDateFormatter(ax.xaxis.get_major_locator()))
 
-save_fig(f'{path_to_sk_lda}clean/figure_{key_w}{tag}{pol}{stem_tag}{n_topics}')
-
-
+save_fig(f'{path_to_figures_final}fig_4_{key_w}{tag}{pol}{stem_tag}{n_topics}')
 
 # ALL --------------------------------------------------------------------------------------------------------------
 
@@ -399,4 +393,4 @@ plt.ylim(0,1)
 ax.xaxis.set_major_formatter(
     mdates.ConciseDateFormatter(ax.xaxis.get_major_locator()))
 
-save_fig(f'{path_to_sk_lda}clean/figure_{key_w}{tag}{pol}{stem_tag}{n_topics}')
+save_fig(f'{path_to_figures_final}fig_4_{key_w}{tag}{pol}{stem_tag}{n_topics}')
