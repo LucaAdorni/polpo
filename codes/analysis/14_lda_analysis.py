@@ -231,9 +231,10 @@ for k in topic_dict.keys():
     top_df.loc[top_df.Topic.isin(topic_dict[k]), 'Macro-Topic'] = k
 
 # Cleanup and export to LaTex
-top_df = top_df[['Topic', 'Macro-Topic', 'Tweets']]
+top_df = top_df[['Topic', 'Macro-Topic', 'Words', 'Tweets']]
 top_df['Topic'] = top_df['Topic'].apply(lambda x: re.sub("topic_", "Topic ", x))
-top_df.to_latex(f"{path_to_sk_lda}clean/top_tweets{key_w}{tag}{pol}{stem_tag}{n_topics}.tex")
+top_df['Words'] = top_df['Words'].apply(lambda x: ", ".join(x))
+top_df.to_latex(f"{path_to_sk_lda}clean/table_a3_top_tweets{key_w}{tag}{pol}{stem_tag}{n_topics}.tex")
 
 # Now generate the plot over time
 df['n_obs'] = 1
@@ -261,11 +262,11 @@ sns.lineplot(data = rebalanced_data, x = 'week_start', y = 'n_obs',
              hue = 'macro', markers = True,
              markersize = 10, style = 'macro', dashes = ['', '', ''], ax = ax)
 sns.despine()
-plt.ylabel('% of Tweets', fontsize = 28)
-plt.xlabel('Weeks', fontsize = 28)
-plt.yticks(fontsize = 20)
-plt.xticks(fontsize = 20)
-plt.legend(loc = 'upper right', fontsize = 28)
+plt.ylabel('% of Tweets', fontsize = 35)
+plt.xlabel('Weeks', fontsize = 35)
+plt.yticks(fontsize = 30)
+plt.xticks(fontsize = 30)
+plt.legend(loc = 'upper right', fontsize = 35, ncol = 2, frameon=False)
 plt.ylim(0,1)
 ax.xaxis.set_major_formatter(
     mdates.ConciseDateFormatter(ax.xaxis.get_major_locator()))
@@ -354,9 +355,10 @@ for k in topic_dict.keys():
     top_df.loc[top_df.Topic.isin(topic_dict[k]), 'Macro-Topic'] = k
 
 # Cleanup and export to LaTex
-top_df = top_df[['Topic', 'Macro-Topic', 'Tweets']]
+top_df = top_df[['Topic', 'Macro-Topic', 'Words', 'Tweets']]
 top_df['Topic'] = top_df['Topic'].apply(lambda x: re.sub("topic_", "Topic ", x))
-top_df.to_latex(f"{path_to_sk_lda}clean/top_tweets{key_w}{tag}{pol}{stem_tag}{n_topics}.tex")
+top_df['Words'] = top_df['Words'].apply(lambda x: ", ".join(x))
+top_df.to_latex(f"{path_to_sk_lda}clean/table_a4_top_tweets{key_w}{tag}{pol}{stem_tag}{n_topics}.tex")
 
 # Now generate the plot over time
 df['n_obs'] = 1
@@ -384,11 +386,11 @@ sns.lineplot(data = rebalanced_data, x = 'week_start', y = 'n_obs',
              hue = 'macro', markers = True,
              markersize = 10, style = 'macro', dashes = ['', '', ''], ax = ax)
 sns.despine()
-plt.ylabel('% of Tweets', fontsize = 28)
-plt.xlabel('Weeks', fontsize = 28)
-plt.yticks(fontsize = 20)
-plt.xticks(fontsize = 20)
-plt.legend(loc = 'upper right', fontsize = 28)
+plt.ylabel('% of Tweets', fontsize = 35)
+plt.xlabel('Weeks', fontsize = 35)
+plt.yticks(fontsize = 30)
+plt.xticks(fontsize = 30)
+plt.legend(loc = 'upper right', fontsize = 35, ncol = 2, frameon=False)
 plt.ylim(0,1)
 ax.xaxis.set_major_formatter(
     mdates.ConciseDateFormatter(ax.xaxis.get_major_locator()))
