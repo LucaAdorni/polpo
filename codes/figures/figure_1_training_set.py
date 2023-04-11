@@ -16,6 +16,7 @@ from collections import Counter
 import matplotlib.pyplot as plt
 import seaborn as sns
 import random
+import matplotlib.dates as mdates
 
 pd.options.display.max_columns = 200
 pd.options.display.max_rows = 1000
@@ -65,10 +66,10 @@ df_plot = pd.DataFrame(df_plot)
 fig, ax = plt.subplots(figsize=(15, 10))
 sns.histplot(data= df_plot, x = "final_polarization", kde = True, bins = 50, ax = ax)
 sns.despine()
-plt.ylabel('Week/User Count', fontsize = 25)
-plt.xlabel('Polarization Score', fontsize = 25)
-plt.yticks(fontsize = 20)
-plt.xticks(fontsize = 20)
+plt.ylabel('Week/User Count', fontsize = 35)
+plt.xlabel('Polarization Score', fontsize = 35)
+plt.yticks(fontsize = 30)
+plt.xticks(fontsize = 30)
 plt.axvline(0, linewidth = 1, alpha = 0.9, color='r', linestyle = '--')
 save_fig(f'{path_to_figures}final/fig_1a_training_set_hist')
 
@@ -80,8 +81,10 @@ df_plot = pd.DataFrame(df_plot)
 fig, ax = plt.subplots(figsize=(15, 10))
 sns.lineplot(x = 'week_start', y = 'final_polarization', data = df_plot, ax = ax)
 sns.despine()
-plt.ylabel('Political Score', fontsize = 25)
-plt.xlabel('Weeks', fontsize = 25)
-plt.yticks(fontsize = 20)
-plt.xticks(fontsize = 20)
+plt.ylabel('Political Score', fontsize = 35)
+plt.xlabel('Weeks', fontsize = 35)
+plt.yticks(fontsize = 30)
+plt.xticks(fontsize = 30)
+ax.xaxis.set_major_formatter(
+    mdates.ConciseDateFormatter(ax.xaxis.get_major_locator()))
 save_fig(f'{path_to_figures}final/fig_1b_training_set_weekly')

@@ -16,6 +16,7 @@ from collections import Counter
 import matplotlib.pyplot as plt
 import datetime as dt
 import seaborn as sns
+import matplotlib.dates as mdates
 import random
 
 pd.options.display.max_columns = 200
@@ -75,8 +76,10 @@ df_plot = df_plot.loc[df_plot.index < dt.datetime(2021, 1,1)]
 fig, ax = plt.subplots(figsize=(15, 10))
 sns.lineplot(x = 'week_start', y = 'pred', data = df_plot, ax = ax)
 sns.despine()
-plt.ylabel('Political Score')
-plt.xlabel('Weeks')
+plt.ylabel('Political Score', fontsize = 35)
+plt.xlabel('Weeks', fontsize = 35)
+plt.yticks(fontsize = 30)
+plt.xticks(fontsize = 30)
 max_value = df_plot["pred"].max() - df_plot["pred"].max()*0.001
 pandemic = pd.datetime(2020, 2, 24)
 plt.axvline(pandemic, linewidth = 1, alpha = 1, color = 'red', linestyle = '--')
@@ -89,16 +92,18 @@ annotation_dict = {
     , '(5)': (2020, 10, 12)
     , '(6)': (2020, 11, 2)
 }
+ax.xaxis.set_major_formatter(
+    mdates.ConciseDateFormatter(ax.xaxis.get_major_locator()))
 
 for key, value in annotation_dict.items():
 
     week_date = dt.datetime(value[0], value[1], value[2])
     week_date = week_date - dt.timedelta(days=week_date.weekday())
     # Shift to the right the annotation
-    week_date2 = dt.datetime(value[0], value[1], value[2] + 8)
+    week_date2 = dt.datetime(value[0], value[1], value[2] + 6)
     week_date2 = week_date2 - dt.timedelta(days=week_date2.weekday())
 
     plt.axvline(week_date,linewidth=1.5, alpha = 0.7, color='dimgrey', linestyle = '-.')
-    ax.text(week_date2, max_value, key, fontsize = 20, alpha = 0.7)
+    ax.text(week_date2, max_value, key, fontsize = 25, alpha = 0.7)
 
 save_fig(f'{path_to_figures}final/fig_2_polarization_time')

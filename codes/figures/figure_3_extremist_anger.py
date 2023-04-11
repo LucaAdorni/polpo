@@ -19,6 +19,7 @@ import seaborn as sns
 import random
 import statsmodels.api as sm
 import statsmodels.formula.api as smf
+import matplotlib.dates as mdates
 from scipy.stats import pearsonr, spearmanr
 
 pd.options.display.max_columns = 200
@@ -93,7 +94,7 @@ def time_plot(dataframe, column, tag = "", y_label = "Odds Ratios", x = 'week_st
             , '(6)': (2020, 11, 2)
         }
     else:
-        plt.xlabel("Week Start", fontsize = 28)
+        plt.xlabel("Week Start", fontsize = 35)
         plt.axvline(pandemic, linewidth = 1.5, alpha = 1, color = 'red', linestyle = '--')
         annotation_dict = {
             "(1)": (2020, 3, 9)
@@ -103,12 +104,14 @@ def time_plot(dataframe, column, tag = "", y_label = "Odds Ratios", x = 'week_st
             , '(5)': (2020, 10, 12)
             , '(6)': (2020, 11, 2)
         }
-    plt.ylabel(f"{y_label} (%)", fontsize = 28)
+    plt.ylabel(f"{y_label} (%)", fontsize = 35)
     
     plt.axhline(0, linewidth = 1, alpha = 0.5, color = 'black', linestyle = '--')
-    plt.yticks(fontsize = 20)
-    plt.xticks(fontsize = 20)
-
+    plt.yticks(fontsize = 30)
+    plt.xticks(fontsize = 30)
+    locator = mdates.AutoDateLocator(minticks=12, maxticks=14)
+    formatter = mdates.ConciseDateFormatter(locator)
+    ax.xaxis.set_major_formatter(formatter)
     if x == 'month':
         annotation_dict = {
             "(1)": 3
@@ -122,7 +125,7 @@ def time_plot(dataframe, column, tag = "", y_label = "Odds Ratios", x = 'week_st
         for key, value in annotation_dict.items():
 
             plt.axvline(value,linewidth=1.5, alpha = 0.7, color='dimgrey', linestyle = '-.')
-            ax.text(value+0.1, max_value, key, fontsize = 20, alpha = 0.7)
+            ax.text(value+0.1, max_value, key, fontsize = 25, alpha = 0.7)
 
     else:
         for key, value in annotation_dict.items():
@@ -134,7 +137,7 @@ def time_plot(dataframe, column, tag = "", y_label = "Odds Ratios", x = 'week_st
             week_date2 = week_date2 - dt.timedelta(days=week_date2.weekday())
 
             plt.axvline(week_date,linewidth=1.5, alpha = 0.7, color='dimgrey', linestyle = '-.')
-            ax.text(week_date2, max_value, key, fontsize = 20, alpha = 0.7)
+            ax.text(week_date2, max_value, key, fontsize = 25, alpha = 0.7)
         
     save_fig(f'{path_to_figures_final}{tag}{column}')
 
@@ -158,12 +161,18 @@ def double_scatter(df1, df2, col1, col2, col1_name, col2_name, tag = ""):
     fig, ax = plt.subplots(figsize=(15, 10))
     sns.regplot(x=df1[f"{col1}_g"], y=df1[f"{col2}_g"], ax = ax, scatter_kws = {"s": 100})
     sns.despine()
-    ax.text(df1[f"{col1}_g"].min(), df1[f"{col2}_g"].max()*1.2, "OLS slope: {:4.3f}, R2: {:4.3f}, Pearsons: {:4.3f}, Spearman: {:4.3f}".format(
-                mod_ols.params[-1], 1-mod_ols.ssr/mod_ols.uncentered_tss, pearson, spear), fontsize = 20)
-    plt.yticks(fontsize = 20)
-    plt.xticks(fontsize = 20)
-    ax.set_ylabel(f"{col2_name} (%)", fontsize = 28)
-    ax.set_xlabel(f"{col1_name} (%)", fontsize = 28)
+    ax.text(df1[f"{col1}_g"].min(), df1[f"{col2}_g"].max()*1.3,
+             "OLS slope: {:4.3f}, R2: {:4.3f}".format(
+                mod_ols.params[-1], 1-mod_ols.ssr/mod_ols.uncentered_tss), 
+                fontsize = 30)
+    ax.text(df1[f"{col1}_g"].min(), df1[f"{col2}_g"].max()*1.15,
+             "Pearson: {:4.3f}, Spearman: {:4.3f}".format(
+                pearson, spear), 
+                fontsize = 30)
+    plt.yticks(fontsize = 30)
+    plt.xticks(fontsize = 30)
+    ax.set_ylabel(f"{col2_name} (%)", fontsize = 35)
+    ax.set_xlabel(f"{col1_name} (%)", fontsize = 35)
     save_fig(f'{path_to_figures_final}{tag}{col1}_{col2}_scatter')
 
 
@@ -178,8 +187,8 @@ def double_lineplot(df1, df2, col1, col2, col1_name, col2_name, label_1, label_2
     fig, ax = plt.subplots(figsize=(15, 10))
     sns.lineplot(data=df1, x = 'week_start', y=f"{col1}_g"
                 , ax=ax, label = label_1, legend = False)
-    plt.yticks(fontsize = 20)
-    plt.xticks(fontsize = 20)
+    plt.yticks(fontsize = 30)
+    plt.xticks(fontsize = 30)
     if ax_2 == True:
         ax2 = ax.twinx()   
         ax2.set_ylabel(f"{col2_name} (%)", fontsize = 28)
@@ -187,24 +196,27 @@ def double_lineplot(df1, df2, col1, col2, col1_name, col2_name, label_1, label_2
         ax2 = ax
     sns.lineplot(data=df2, x = 'week_start', y=f"{col2}_g"
                 , ax=ax2, label = label_2, legend = False, color = 'darkorange')
-    plt.yticks(fontsize = 20)
-    plt.xticks(fontsize = 20)
+    plt.yticks(fontsize = 35)
+    plt.xticks(fontsize = 35)
     if col1 == 'far_right':
         ax.set_ylim(-0.5, 0.5)
     else:
         ax.set_ylim(-5, 5)
     ax2.set_ylim(-12, 12)
     plt.axhline(0, linewidth = 1, alpha = 0.5, color = 'black', linestyle = '--')
-    ax.set_ylabel(f"{col1_name} (%)", fontsize = 28)
+    ax.set_ylabel(f"{col1_name} (%)", fontsize = 35)
     plt.axvline(pandemic, linewidth = 1, alpha = 1, color = 'red', linestyle = '--')
     # plt.axhline(0, linewidth = 1, alpha = 0.5, color = 'black', linestyle = '--')
-    ax.set_xlabel("Week Start", fontsize = 28)
+    ax.set_xlabel("Week Start", fontsize = 35)
+    locator = mdates.AutoDateLocator(minticks=12, maxticks=14)
+    formatter = mdates.ConciseDateFormatter(locator)
+    ax.xaxis.set_major_formatter(formatter)
     if ax_2:
         h1, l1 = ax.get_legend_handles_labels()
         h2, l2 = ax2.get_legend_handles_labels()
-        ax2.legend(h1+h2, l1+l2, loc='upper right', fontsize = 28)
+        ax2.legend(h1+h2, l1+l2, loc='upper right', fontsize = 35, ncol = 2, frameon=False)
     else:
-        plt.legend(loc = 'upper right', fontsize = 28)
+        plt.legend(loc = 'upper right', fontsize = 35)
     save_fig(f'{path_to_figures_final}{tag}{col1}_{col2}')
 
 
