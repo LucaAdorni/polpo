@@ -60,6 +60,7 @@ path_to_tables = f"{path_to_repo}tables/"
 
 
 path_to_figures_corr = f"{path_to_figures}corr_heat/"
+path_to_figures_final = f"{path_to_figures}final/"
 
 os.makedirs(path_to_figures_corr, exist_ok = True)
 
@@ -83,30 +84,6 @@ period = 2
 seasonal = 7
 # -----------------
 
-def build_heatmap():
-    # Plot a heatmap of all the correlation coefficients
-    fig, ax = plt.subplots(1,1, figsize=(8,6))
-    colormap = plt.cm.get_cmap('Blues') # 'plasma' or 'viridis'
-    plt.pcolor(corr_matrix, cmap = colormap, vmin = 0, vmax = 1)
-    plt.colorbar(cmap = colormap)
-    ax = plt.gca()
-    ax.set_xticks(np.arange(corr_matrix.shape[0])+0.5)
-    ax.set_yticks(np.arange(corr_matrix.shape[0])+0.5)
-    ax.set_xticklabels(corr_matrix.columns, rotation=80)
-    ax.set_yticklabels(corr_matrix.columns)
-    ax.set_aspect('equal')
-
-# define a function that saves figures
-def save_fig(fig_id, tight_layout=True):
-    # The path of the figures folder ./Figures/fig_id.pdf (fig_id is a variable that you specify 
-    # when you call the function)
-    path = os.path.join(fig_id + ".pdf") 
-    print("Saving figure", fig_id)
-    if tight_layout:
-        plt.tight_layout()
-    plt.savefig(path, format='pdf', dpi=300)
-
-
 def build_resid(period = 44, seasonal = 5):
     # Get the weekly-activity for each:
     # a. polarization group
@@ -128,8 +105,8 @@ def build_resid(period = 44, seasonal = 5):
         store[col] = res.resid
     # Fix order of index
     store = store.T.reindex(['far_left', 'center_left', 'center', 'center_right', 'far_right', 
-                             'anti-gov', 'immuni', 'lombardia', 'pro-lock',
-                             'conspiracy', 'novax', 'migrants', 'fake-news',
+                             'anti-gov', 'immuni', 'pro-lock', 'lombardia', 
+                             'conspiracy', 'novax', 'migrants',
                              ]).T
 
     return store
@@ -184,7 +161,6 @@ hash_dict = {'anti-gov': [h for h in  hashtags.hashtags.unique().tolist() if
                     and re.search("immuniz|immunit", h) == None)
                     or (re.search('privacy|tracing|tracciamento', h))],
              'lombardia': [h for h in  hashtags.hashtags.unique().tolist() if re.search("lombardia|fontana|gallera", h)],
-             'fake-news': [h for h in  hashtags.hashtags.unique().tolist() if re.search("fakenew(s)|disinformazione|infodemia", h)],
              'conspiracy': [h for h in  hashtags.hashtags.unique().tolist() if (re.search("gates|soros|truffa|pipistrell|conspiracy|lobby|wuhanfile|terror", h))
                                                         or (re.search("biologic", h) and re.search("arma|warfare", h))],
              'novax': [h for h in  hashtags.hashtags.unique().tolist() if (re.search("vaccin|pfizer|biontech|astrazeneca|vax", h) 
@@ -196,21 +172,6 @@ hash_dict = {'anti-gov': [h for h in  hashtags.hashtags.unique().tolist() if
 }
   
 
-[h for h in  hashtags.hashtags.unique().tolist() if re.search("deepstate|microchip|gates|soros|illuminati|idrossiclo|pipistrell", h)]  
-
-[h for h in  hashtags.hashtags.unique().tolist() if re.search("vaccin|pfizer|biontech|astrazeneca|vax", h)]  
-
-[h for h in  hashtags.hashtags.unique().tolist() if (re.search("attilio", h))]  
-
-[h for h in  hashtags.hashtags.unique().tolist() if (re.search("fornitura", h) and re.search("camic", h))]  
-# TO-DO:
-# Anti-Gov
-# Vaccines?
-# Other hashtags?
-# - FakeNews was correlated with leftist, check again what went wrong
-# 
-
-
 # Now flag all the tweets with at least one of those hashtags
 for col, v in hash_dict.items():
     if count_hash_app:
@@ -218,114 +179,21 @@ for col, v in hash_dict.items():
     else:
         final_df[col] = final_df.hashtag.progress_apply(lambda x: sum(el in x for el in v))
 
-col = 'lombardia'
-v = [h for h in  hashtags.hashtags.unique().tolist() if (re.search("lombardia|fontana|gallera", h)
-                                                         or (re.search("fornitura", h) and re.search("camic", h)))]
-
-v = v + [h for h in  hashtags.hashtags.unique().tolist() if (re.search("vaccin|pfizer|biontech|astrazeneca|vax", h) 
-                                                                        and re.search("mai|fraud|stop|follia|killer|lobby", h))
-                                                                        or (re.search("novaccin|noalvaccin", h))
-                                                                        or (re.search("novax|antivax|no-vax", h))]
-
-# # Now flag all the tweets with at least one of those hashtags
-# for col, v in hash_dict.items():
-#     final_df[col] = final_df.hashtag.progress_apply(lambda x: sum(el in x for el in v))
-#     col = 'novax'
-#     v = [h for h in  hashtags.hashtags.unique().tolist() if 
-#                             (re.search("governo|conte|speranza|pd|m5s|euro|#ue|#eu|eu$", h) 
-#                             and re.search("criminal|vergogn|dimett|irresp|merd|infam|acasa|cazzo|c4zz0", h)) 
-#                             or (re.search("pdiot|pidiot", h)) or (re.search("dittatura", h))]
-#     v = v  + [h for h in  hashtags.hashtags.unique().tolist() if (re.search("casa", h) 
-#                 and re.search("stare|sto|stiamo|resto|restare|restiamo|rimanere|rimango|rimaniamo", h) 
-#                 and re.search("cazzo|non|rotto|odio|accidenti|beata|nn|c4zz0|mah", h)) 
-#                 or (re.search("andra|andare", h) 
-#                 and re.search("bene", h) and re.search("sega|cazzo|non|accidenti|beata|nn|c4zz0|mah", h))]
-#     final_df[col] = final_df.hashtag.progress_apply(lambda x: sum(el in x for el in v))
-#     final_df[col] = final_df.hashtag.progress_apply(lambda x: bool(set(x) & set(v))).astype(int)
-
-
-
-
-
 # Build our dataset
 store = build_resid(period, seasonal)
 # Build a pearson correlation matrix
 corr_matrix = store.corr(method = method)
 corr_matrix
-build_heatmap()
-save_fig(f"{path_to_figures_corr}pol_act_heatmap")
-plt.show()
+
+# Change names of columns and rows
+corr_matrix.columns = ['Far Left', 'Center Left', 'Center', 'Center Right', 'Far Right', 'Anti-Gov'
+                       , 'Immuni', 'Pro-Lock', 'Lombardia', 'Conspiracy', 'No-Vax', 'Migrants']
+corr_matrix.index = ['Far Left', 'Center Left', 'Center', 'Center Right', 'Far Right', 'Anti-Gov'
+                       , 'Immuni', 'Pro-Lock', 'Lombardia', 'Conspiracy', 'No-Vax', 'Migrants']
 
 # Export to LaTex the correlation table
 corr_matrix.to_latex(f"{path_to_figures_corr}table_a6_corr_table.tex", header = True, index = True)
 
 # Save it also as a pickle
 corr_matrix.to_pickle(f"{path_to_figures_corr}corr_matrix.pkl.gz", compression = 'gzip')
-
-# Threshold to plot correlations
-threshold = 0.49
-
-# Get our list of edges with their relative weights
-edge_list = []
-for i in corr_matrix.index:
-        for j in corr_matrix.columns:
-            if round(corr_matrix.loc[i,j],2) >= threshold and i != j:
-                edge_list.append((j,i,corr_matrix.loc[i,j]))
-
-
-# Initialize our weighted graph
-G = nx.Graph()
-
-# Iterate over all edges and add them
-for edge in edge_list:
-    G.add_edge(edge[0], edge[1], weight=edge[2])
-
-
-# elarge = [(u, v) for (u, v, d) in G.edges(data=True) if d["weight"] > 0.49]
-
-# # nodes
-# nx.draw_networkx_nodes(G, pos, node_size=700)
-
-# # edges
-# nx.draw_networkx_edges(G, pos, edgelist=elarge, width=6)
-
-# edge weight labels
-edge_labels = nx.get_edge_attributes(G, "weight")
-nx.draw_networkx_edge_labels(G, pos, edge_labels)
-
-ax = plt.gca()
-ax.margins(0.08)
-plt.axis("off")
-plt.tight_layout()
-plt.show()
-
-
-# Define a dictionary of labels
-label_dict = {'far_right': "Far Right", 'far_left':'Far Left', 
-              'center_left': 'Center Left',
-            'center': 'Center', 'center_right': 'Center Right', 'anti-gov': "Anti-Gov",
-            'lombardia': "Lombardia", 'immuni': 'Immuni', 'fake-news':'Fake-News', 'pro-lock': 'Pro-Lock'}
-
-
-fig, ax = plt.subplots(1,1, figsize=(8,6))
-
-# positions for all nodes - seed for reproducibility
-pos = nx.spring_layout(G, seed=42) 
-# pos = nx.nx_agraph.graphviz_layout(G, 'neato', root = 42)
-# node labels
-nx.draw_networkx_labels(G, pos, labels = False, font_size=20, font_family="sans-serif")
-# Set options to get colored edges
-options = {
-    "node_color": "#A0CBE2",
-    "edge_color": [d['weight'] for (u, v, d) in G.edges(data=True)],
-    "width": 4,
-    "edge_cmap": plt.cm.Blues,
-    "with_labels": True,
-}
-nx.draw(G, pos, **options)
-ax = plt.gca()
-ax.margins(0.08)
-plt.axis("off")
-plt.tight_layout()
-save_fig(f"{path_to_figures_corr}pol_act_netw")
-plt.show()
+corr_matrix.to_csv(f"{path_to_figures_corr}corr_matrix.csv.gz", compression = 'gzip', index = False)
