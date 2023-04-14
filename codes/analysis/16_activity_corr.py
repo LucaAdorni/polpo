@@ -106,7 +106,6 @@ def build_resid(period = 44, seasonal = 5):
     # Fix order of index
     store = store.T.reindex(['far_left', 'center_left', 'center', 'center_right', 'far_right', 
                              'anti-gov', 'immuni', 'pro-lock', 'lombardia', 
-                             'conspiracy', 'novax', 'migrants',
                              ]).T
 
     return store
@@ -161,14 +160,6 @@ hash_dict = {'anti-gov': [h for h in  hashtags.hashtags.unique().tolist() if
                     and re.search("immuniz|immunit", h) == None)
                     or (re.search('privacy|tracing|tracciamento', h))],
              'lombardia': [h for h in  hashtags.hashtags.unique().tolist() if re.search("lombardia|fontana|gallera", h)],
-             'conspiracy': [h for h in  hashtags.hashtags.unique().tolist() if (re.search("gates|soros|truffa|pipistrell|conspiracy|lobby|wuhanfile|terror", h))
-                                                        or (re.search("biologic", h) and re.search("arma|warfare", h))],
-             'novax': [h for h in  hashtags.hashtags.unique().tolist() if (re.search("vaccin|pfizer|biontech|astrazeneca|vax", h) 
-                                                                        and re.search("mai|fraud|stop|follia|killer|lobby", h))
-                                                                        or (re.search("novaccin|noalvaccin", h))
-                                                                        or (re.search("novax|antivax|no-vax", h))],
-             'migrants':[h for h in  hashtags.hashtags.unique().tolist() if (re.search("porto|porti", h) and re.search("chiud|chius", h))
-                                                        or (re.search('migrant|immigra|lampedusa|lamorgese|extracomunit|barcon|sbarc|clandestin', h))]
 }
   
 
@@ -179,17 +170,37 @@ for col, v in hash_dict.items():
     else:
         final_df[col] = final_df.hashtag.progress_apply(lambda x: sum(el in x for el in v))
 
+# Drop hashtag column, we do not need it anymore
+final_df.drop(columns = ['hashtag'], inplace = True)
+
+# Merge it with the dataset for our analysis/regressions
+df = pd.read_pickle(f"{path_to_processed}final_df_analysis.pkl.gz", compression = 'gzip')
+merge = final_df[['scree_name', 'week_start', 'anti-gov', 'pro-lock', 'immuni', 'lombardia']]
+# Get the sum for user/week pair
+merge = merge.groupby(['week_start', 'scree_name'], as_index = False).sum()
+df = df.merge(merge, on = ['week_start', 'scree_name'], how = 'left', validate = '1:1')
+
+# Save it
+df.to_pickle(f"{path_to_processed}final_df_analysis.pkl.gz", compression = 'gzip')
+
+# Produce an export for stata
+df.rename(columns = {'anti-gov': 'anti_gov', 'pro-lock':'pro_lock'}, inplace = True)
+df[['scree_name', 'orient_change_toleft', 'orient_change_toright', 'extremism_toleft', 'extremism_toright', 'center', 'center_left', 'center_right', 'far_left', 'far_right'
+    , 'sentiment', 'anger', 'fear', 'joy', 'sadness', 'n_tweets', 'tot_activity', 'gender', 
+    'age', 'week_start', 'dist', 'regions', 'treat', 'anti_gov', 'pro_lock', 'immuni', 'lombardia']].to_stata(f"{path_to_processed}final_df_analysis.dta.gz", compression = 'gzip'
+                                           , convert_dates= {'week_start': '%tw'},
+                                           version = 117)
+
 # Build our dataset
 store = build_resid(period, seasonal)
 # Build a pearson correlation matrix
 corr_matrix = store.corr(method = method)
-corr_matrix
 
 # Change names of columns and rows
 corr_matrix.columns = ['Far Left', 'Center Left', 'Center', 'Center Right', 'Far Right', 'Anti-Gov'
-                       , 'Immuni', 'Pro-Lock', 'Lombardia', 'Conspiracy', 'No-Vax', 'Migrants']
+                       , 'Immuni', 'Pro-Lock', 'Lombardia']
 corr_matrix.index = ['Far Left', 'Center Left', 'Center', 'Center Right', 'Far Right', 'Anti-Gov'
-                       , 'Immuni', 'Pro-Lock', 'Lombardia', 'Conspiracy', 'No-Vax', 'Migrants']
+                       , 'Immuni', 'Pro-Lock', 'Lombardia']
 
 # Export to LaTex the correlation table
 corr_matrix.to_latex(f"{path_to_figures_corr}table_a6_corr_table.tex", header = True, index = True)
