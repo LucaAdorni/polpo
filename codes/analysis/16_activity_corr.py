@@ -1,7 +1,7 @@
 ###########################################################
-# Code to create plot graphs
+# Code to create hashtag correlations
 # Author: Luca Adorni
-# Date: January 2023
+# Date: March 2023
 ###########################################################
 
 # 0. Setup -------------------------------------------------
@@ -64,7 +64,7 @@ path_to_figures_final = f"{path_to_figures}final/"
 
 os.makedirs(path_to_figures_corr, exist_ok = True)
 
-# 1. LOAD DATASET ------------------------------------
+# 1. LOAD DATASET ---------------------------------------------------------------------------------
 
 
 
@@ -185,7 +185,7 @@ df.to_pickle(f"{path_to_processed}final_df_analysis.pkl.gz", compression = 'gzip
 
 # Produce an export for stata
 df.rename(columns = {'anti-gov': 'anti_gov', 'pro-lock':'pro_lock'}, inplace = True)
-df[['scree_name', 'orient_change_toleft', 'orient_change_toright', 'extremism_toleft', 'extremism_toright', 'center', 'center_left', 'center_right', 'far_left', 'far_right'
+df[['scree_name', 'prediction', 'pol_old', 'bin_old', 'orient_change_toleft', 'orient_change_toright', 'extremism_toleft', 'extremism_toright', 'center', 'center_left', 'center_right', 'far_left', 'far_right'
     , 'sentiment', 'anger', 'fear', 'joy', 'sadness', 'n_tweets', 'tot_activity', 'gender', 
     'age', 'week_start', 'dist', 'regions', 'treat', 'anti_gov', 'pro_lock', 'immuni', 'lombardia']].to_stata(f"{path_to_processed}final_df_analysis.dta.gz", compression = 'gzip'
                                            , convert_dates= {'week_start': '%tw'},
