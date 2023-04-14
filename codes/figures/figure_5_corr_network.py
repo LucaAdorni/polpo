@@ -70,12 +70,13 @@ def build_heatmap():
     fig, ax = plt.subplots(1,1, figsize=(8,6))
     colormap = plt.cm.get_cmap('Blues') # 'plasma' or 'viridis'
     plt.pcolor(corr_matrix, cmap = colormap, vmin = 0, vmax = 1)
-    plt.colorbar(cmap = colormap)
+    cbar = plt.colorbar(cmap = colormap)
+    cbar.ax.tick_params(labelsize=18)
     ax = plt.gca()
-    ax.set_xticks(np.arange(corr_matrix.shape[0])+0.5, fontsize = 30)
+    ax.set_xticks(np.arange(corr_matrix.shape[1])+0.5, fontsize = 30)
     ax.set_yticks(np.arange(corr_matrix.shape[0])+0.5, fontsize = 30)
-    ax.set_xticklabels(corr_matrix.columns, rotation=80, fontsize = 15)
-    ax.set_yticklabels(corr_matrix.columns, fontsize = 15)
+    ax.set_xticklabels(corr_matrix.columns, rotation=70, fontsize = 18)
+    ax.set_yticklabels(corr_matrix.index, fontsize = 18)
     ax.set_aspect('equal')
 
 # define a function that saves figures
@@ -92,7 +93,20 @@ def save_fig(fig_id, tight_layout=True):
 corr_matrix = pd.read_pickle(f"{path_to_figures_corr}corr_matrix.pkl.gz", compression = 'gzip')
 
 
+# Restrict to the columns we care
+corr_matrix = corr_matrix[['Far Left', 'Center Left', 'Center', 'Center Right', 'Far Right']]
+
+
+# Change the order of the rows
+corr_matrix = corr_matrix.loc[['Lombardia', 'Pro-Lock', 'Far Left', 'Center Left', 'Center',
+                 'Center Right', 'Far Right', 'Anti-Gov', 'Immuni']]
+
+# Export to LaTex the correlation table
+corr_matrix.to_latex(f"{path_to_figures_corr}table_a6_corr_table.tex", header = True, index = True)
+
 # 2. HEATMAP ----------------------------------------------------
+
+corr_matrix = corr_matrix.T
 
 # Build a heatmap
 build_heatmap()
