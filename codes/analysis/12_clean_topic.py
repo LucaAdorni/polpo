@@ -1,23 +1,10 @@
 ###########################################################
-# TOPIC MODELING - GSDMM
+# TOPIC MODELING - Code to produce cleaned up text for LDA models
 # Author: Luca Adorni
 # Date: March 2023
 ###########################################################
 
 # 0. Setup -------------------------------------------------
-
-try:
-    from mpi4py import MPI
-    comm = MPI.COMM_WORLD # initialize communications
-    rank = comm.Get_rank()
-    size = comm.Get_size()
-    mpi_use = True
-except:
-    print("Not running on a cluster")
-    rank = 0
-    size = 1
-    mpi_use = False
-
 
 import re
 import nltk
@@ -27,15 +14,12 @@ import spacy
 from nltk.corpus import stopwords
 import os
 import sys
-
-sys.path.append(f"{os.getcwd()}gsdmm/")
-
+from gensim.models import Phrases
 import numpy as np
 import pandas as pd
 import pickle
 from tqdm import tqdm
 from nltk.stem.snowball import SnowballStemmer
-
 import warnings
 import datetime as dt
 warnings.filterwarnings("ignore", category=DeprecationWarning) 
@@ -180,10 +164,6 @@ def tokenize_tweets(df):
     print('Complete. Number of Tweets that have been cleaned and tokenized : {}'.format(num_tweets))
     return df
 
-
-
-from gensim.models import Phrases
-
 def prepare_tokens(docs, min_bigrams = 20):
     bigram = Phrases(docs, min_count = min_bigrams)
     for idx in range(len(docs)):
@@ -226,25 +206,7 @@ except:
 # Restrict to topics we care about
 final_df = final_df.loc[final_df.topic.isin(['politics', 'economics', 'health', 'vaccine'])]
 
-print("Process - Rank: %d -----------------------------------------------------"%rank)
-
-end = final_df.shape[0]
-batches = round(end/size)
-
-# if rank == size-1:
-#     print(f"Currently doing {batches*rank} to {end}")
-# else:
-#     print(f"Currently doing {batches*rank} to {batches*(rank+1)}")
-# final_df = final_df.iloc[(batches*rank):(batches*(rank+1))]
+# Tokenize our tweets
 final_df = tokenize_tweets(final_df)
-
-final_df.to_pickle(f"{path_to_processed}cleaned_gsdmm_tweets{rank}{stem_tag}.pkl.gz", compression = 'gzip')
-
-print(final_df.shape)
-
-# store = []
-# for i in range(200):
-#     store.append(pd.read_pickle(f"{path_to_processed}cleaned_gsdmm_tweets{i}{stem_tag}.pkl.gz", compression = 'gzip'))
-# store = pd.concat(store)
-
-# store.to_pickle(f"{path_to_processed}cleaned_gsdmm_tweets{stem_tag}.pkl.gz", compression = 'gzip')
+# Save it
+final_df.to_pickle(f"{path_to_processed}cleaned_gsdmm_tweets{stem_tag}.pkl.gz", compression = 'gzip')

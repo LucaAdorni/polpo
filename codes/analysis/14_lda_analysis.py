@@ -260,7 +260,7 @@ rebalanced_data['n_obs'] = rebalanced_data.groupby(['macro'], as_index = False).
 fig, ax = plt.subplots(figsize=(15, 10))
 sns.lineplot(data = rebalanced_data, x = 'week_start', y = 'n_obs', 
              hue = 'macro', markers = True,
-             markersize = 10, style = 'macro', dashes = ['', '', ''], ax = ax)
+             markersize = 10, style = 'macro', dashes = True, ax = ax)
 sns.despine()
 plt.ylabel('% of Tweets', fontsize = 35)
 plt.xlabel('Weeks', fontsize = 35)
@@ -384,7 +384,7 @@ rebalanced_data['n_obs'] = rebalanced_data.groupby(['macro'], as_index = False).
 fig, ax = plt.subplots(figsize=(15, 10))
 sns.lineplot(data = rebalanced_data, x = 'week_start', y = 'n_obs', 
              hue = 'macro', markers = True,
-             markersize = 10, style = 'macro', dashes = ['', '', ''], ax = ax)
+             markersize = 10, style = 'macro', dashes = True, ax = ax)
 sns.despine()
 plt.ylabel('% of Tweets', fontsize = 35)
 plt.xlabel('Weeks', fontsize = 35)
