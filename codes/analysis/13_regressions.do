@@ -46,8 +46,7 @@ log using "${logs}12_reg.log", text replace name(polpo_reg)
 * 1. Import Data ---------------------------------------------------------------------
 
 * Load our main data
-gzuse "${processed}reg_df.dta.gz", clear
-
+gzuse "${processed}final_df_analysis.dta.gz", clear
 
 * Encode our covariates
 encode dist, gen(dist_enc)
