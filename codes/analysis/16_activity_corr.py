@@ -95,7 +95,7 @@ def build_resid(period = 44, seasonal = 5):
         corr_df = corr_df.pivot(columns = ['polarization_bin'], index = 'week_start', values = 'scree_name')
     hashtag_df = final_df.groupby(['week_start'], as_index = True)[[k for k in hash_dict.keys()]].sum()
 
-    corr_df = pd.concat([corr_df, hashtag_df], axis = 1)
+    corr_df = pd.concat([corr_df.loc[corr_df.index >= pd.datetime(2020, 2, 24)], hashtag_df], axis = 1)
 
     # Use STL to detrend/deseasonalize all our observations
     store = pd.DataFrame()
