@@ -5,6 +5,15 @@
 ###########################################################
 
 # 0. Setup -------------------------------------------------
+#!/usr/bin/env python
+try:
+    from mpi4py import MPI
+    comm = MPI.COMM_WORLD # initialize communications
+    rank = comm.Get_rank()
+    size = comm.Get_size()
+except:
+    print("Not running on a cluster")
+    rank = 0
 
 import numpy as np
 import pandas as pd
@@ -260,6 +269,8 @@ def predict_from_model(model, data, batch_size = 32, bert_model = ''):
 
         model = model.cuda()
 
+    model.eval()
+
     total_preds = []
     with torch.no_grad():
     
@@ -283,7 +294,11 @@ def predict_from_model(model, data, batch_size = 32, bert_model = ''):
 
 
 model = BertClassifier()
+random.seed(random_seed)
+np.random.seed(random_seed)
 torch.manual_seed(random_seed)
+if torch.cuda.is_available():
+    torch.cuda.manual_seed_all(random_seed)
 
 model.load_state_dict(torch.load(f'{path_to_models}best_torch_{learning_rate}_{batch_size}_{epoch_num}{percentage_filter}.pt', map_location = 'cpu'))
 

@@ -225,6 +225,7 @@ def predict_from_model(model, data, batch_size = 32, bert_model = ''):
 
         model = model.cuda()
 
+    model.eval()
     total_preds = []
     with torch.no_grad():
     
