@@ -63,12 +63,23 @@ def save_fig(fig_id, tight_layout=True):
 # Load our dataset
 df = pd.read_pickle(f"{path_to_processed}final_df.pkl.gz", compression = 'gzip')
 
-# Restrict to users who have posted at least once in the pre-covid period
-df['min_date'] = df.groupby('scree_name').week_start.transform('min')
-df['max_date'] = df.groupby('scree_name').week_start.transform('max')
-df['check'] = (df.min_date <= pd.datetime(2020, 2, 18))& (df.max_date >= pd.datetime(2020, 2, 18))
+# 1. HISTOGRAM
+# define plot dataframe
+df_plot = df.groupby(['week_start','scree_name']).pred.mean()
+df_plot = pd.DataFrame(df_plot)
+# histogram
+fig, ax = plt.subplots(figsize=(15, 10))
+sns.histplot(data= df_plot, x = "pred", kde = False, stat = 'proportion', bins = 50, ax = ax)
+sns.despine()
+plt.ylabel('Week/User Share', fontsize = 35)
+plt.xlabel('Predicted Polarization', fontsize = 35)
+plt.yticks(fontsize = 30)
+plt.xticks(fontsize = 30)
+plt.axvline(0, linewidth = 1, alpha = 0.9, color='r', linestyle = '--')
+save_fig(f'{path_to_figures}final/fig_2a_hist')
 
-df_plot = df.loc[df.check].groupby('week_start').pred.mean()
+# 2. EVENT GRAPH
+df_plot = df.groupby('week_start').pred.mean()
 df_plot = pd.DataFrame(df_plot)
 df_plot = df_plot.loc[df_plot.index < dt.datetime(2021, 1,1)]
 
@@ -76,21 +87,21 @@ df_plot = df_plot.loc[df_plot.index < dt.datetime(2021, 1,1)]
 fig, ax = plt.subplots(figsize=(15, 10))
 sns.lineplot(x = 'week_start', y = 'pred', data = df_plot, ax = ax)
 sns.despine()
-plt.ylabel('Political Score', fontsize = 35)
+plt.ylabel('Predicted Polarization', fontsize = 35)
 plt.xlabel('Weeks', fontsize = 35)
-plt.yticks(fontsize = 30)
+plt.yticks(np.arange(-0.25, -0.1, 0.05), fontsize = 30)
 plt.xticks(fontsize = 30)
 max_value = df_plot["pred"].max() - df_plot["pred"].max()*0.001
 pandemic = pd.datetime(2020, 2, 24)
 plt.axvline(pandemic, linewidth = 1, alpha = 1, color = 'red', linestyle = '--')
 
 annotation_dict = {
-    "(1)": (2020, 3, 9)
-    , '(2)': (2020, 5, 4)
-    , '(3)': (2020, 6, 15)
-    , '(4)': (2020, 8, 10)
-    , '(5)': (2020, 10, 12)
-    , '(6)': (2020, 11, 2)
+    "1": (2020, 3, 9)
+    , '2': (2020, 5, 4)
+    , '3': (2020, 6, 15)
+    , '4': (2020, 8, 10)
+    , '5': (2020, 10, 12)
+    , '6': (2020, 11, 2)
 }
 ax.xaxis.set_major_formatter(
     mdates.ConciseDateFormatter(ax.xaxis.get_major_locator()))
@@ -100,7 +111,7 @@ for key, value in annotation_dict.items():
     week_date = dt.datetime(value[0], value[1], value[2])
     week_date = week_date - dt.timedelta(days=week_date.weekday())
     # Shift to the right the annotation
-    week_date2 = dt.datetime(value[0], value[1], value[2] + 6)
+    week_date2 = dt.datetime(value[0], value[1], value[2] + 8)
     week_date2 = week_date2 - dt.timedelta(days=week_date2.weekday())
 
     plt.axvline(week_date,linewidth=1.5, alpha = 0.7, color='dimgrey', linestyle = '-.')

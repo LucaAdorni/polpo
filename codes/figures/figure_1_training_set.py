@@ -64,9 +64,9 @@ df_plot = training.groupby(['week_start','scree_name']).final_polarization.mean(
 df_plot = pd.DataFrame(df_plot)
 # histogram
 fig, ax = plt.subplots(figsize=(15, 10))
-sns.histplot(data= df_plot, x = "final_polarization", kde = True, bins = 50, ax = ax)
+sns.histplot(data= df_plot, x = "final_polarization", kde = False, stat = 'proportion', bins = 50, ax = ax)
 sns.despine()
-plt.ylabel('Week/User Count', fontsize = 35)
+plt.ylabel('Week/User Share', fontsize = 35)
 plt.xlabel('Polarization Score', fontsize = 35)
 plt.yticks(fontsize = 30)
 plt.xticks(fontsize = 30)
