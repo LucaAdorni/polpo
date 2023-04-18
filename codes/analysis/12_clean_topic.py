@@ -182,7 +182,7 @@ try:
 except:
     print("Creating data")
     # Load our predicted dataset
-    df = pd.read_pickle(f"{path_to_processed}final_df_clean.pkl.gz", compression = 'gzip')
+    df = pd.read_pickle(f"{path_to_processed}final_df_analysis.pkl.gz", compression = 'gzip')
     # Keep only the info we want
     df = df[['week_start', 'scree_name', 'polarization_bin', 'prediction', 'extremism_toleft', 'extremism_toright', 'orient_change_toleft', 'orient_change_toright']]
 
