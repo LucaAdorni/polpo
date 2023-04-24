@@ -523,16 +523,24 @@ df_train = df_train.append(df_train_2)
 print(f'Training Set: {df_train.shape}')
 print(f'Validation Set: {df_val.shape}')
 print(f'Test Set: {df_test.shape}')
+# Training Set: (21295, 5)
+# Validation Set: (4160, 5)
+# Test Set: (9156, 5)
 
 print(f'Training Set: {df_train.scree_name.nunique()}')
 print(f'Validation Set: {df_val.scree_name.nunique()}')
 print(f'Test Set: {df_test.scree_name.nunique()}')
+# Training Set: 5367
+# Validation Set: 1067
+# Test Set: 2173
 
 print(f'Original # Weeks: {merged_tweets.week_start.nunique()}')
 print(f'Training Set # Weeks: {df_train.week_start.nunique()}')
 print(f'Validation Set # Weeks: {df_val.week_start.nunique()}')
 print(f'Test Set # Weeks: {df_test.week_start.nunique()}')
-
+# Training Set # Weeks: 98
+# Validation Set # Weeks: 97
+# Test Set # Weeks: 98
 
 df_train.to_pickle(f"{path_to_data}processed/df_train{merged_tag}.pkl.gz", compression = 'gzip')
 df_val.to_pickle(f"{path_to_data}processed/df_val{merged_tag}.pkl.gz", compression = 'gzip')
