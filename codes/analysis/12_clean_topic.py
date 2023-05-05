@@ -24,7 +24,7 @@ import warnings
 import datetime as dt
 warnings.filterwarnings("ignore", category=DeprecationWarning) 
 warnings.simplefilter("ignore")
-
+import unidecode
 
 
 pd.options.display.max_columns = 200
@@ -68,9 +68,11 @@ punctuation = '!"$%&\'()*+,-./:;<=>?[\\]^_`{|}~•@'
 # Load italian stopwords
 stop_words = stopwords.words('italian')
 from numpy import loadtxt
-stop2 = loadtxt(f"{path_to_data}stopwords.txt", dtype = str, comments="#", delimiter=",", unpack=False)
+stop2 = loadtxt(f"{path_to_data}stopwords.txt", dtype = str, comments="#", delimiter=",", unpack=False, encoding = 'utf-8')
 stop_words = stop_words + list(stop2)
 stop_words = list(set(stop_words))
+# Unidecode accents
+stop_words = [unidecode.unidecode(t) for t in stop_words]
 
 # Load SpaCy IT model
 nlp = spacy.load("it_core_news_sm")
@@ -145,6 +147,7 @@ def preprocess_tweet(tweet):
     tweet = re.sub('[' + punctuation + ']+', ' ', tweet)  # strip punctuation
     tweet = re.sub('\s+', ' ', tweet)  # remove double spacing
     tweet = re.sub('([0-9]+)', '', tweet)  # remove numbers
+    tweet = unidecode.unidecode(tweet) # convert any character
     tweet_token_list = tokenize(tweet)  # apply lemmatization and tokenization
     tweet = ' '.join(tweet_token_list)
     return tweet
@@ -198,6 +201,9 @@ except:
 
     # Now merge the two sets back
     final_df = post_df.merge(df, how = 'inner', on = ['week_start', 'scree_name'], validate = 'm:1')
+
+    # Remove any potential duplicates
+    final_df.drop_duplicates(inplace = True)
 
     # Save it
     final_df.to_pickle(f"{path_to_processed}tweet_for_topic.pkl.gz", compression = 'gzip')
