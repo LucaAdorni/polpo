@@ -61,28 +61,79 @@ foreach var in fear anger joy sadnes anger pro_lock anti_gov immuni lombardia{
 	replace `var' = `var'/n_tweets
 }
 
+* Generate the polynomial for our polarization prediction
+gen pred2 = prediction^2
+gen pred3 = prediction^3
+
 * Now iteratively produce our poly(3) graphs
 foreach var in anger pro_lock anti_gov immuni lombardia{
 	if "`var'" == "anger"{
 		local ytitle = "Anger (%)"
+		local round_factor = 0.001
 	}
 	else if "`var'" == "pro_lock"{
 		local ytitle = "Pro-Lockdown - avg. hashtags per tweet"
+		local round_factor = 0.0001
 	}
 	else if "`var'" == "anti_gov"{
 		local ytitle = "Anti-Government - avg. hashtags per tweet"
+		local round_factor = 0.0001
 	}
 	else if "`var'" == "immuni"{
 		local ytitle = "Immuni - avg. hashtags per tweet"
+		local round_factor = 0.00001
 	}
 	else if "`var'" == "lombardia"{
 		local ytitle = "Lombardia - avg. hashtags per tweet"
+		local round_factor = 0.0001
 	}
+//	
+// 	binsreg `var' prediction, ///
+// 	polyreg(3) polyregplotopt(lcolor(maroon)) nbins(20)  name(`var', replace) dots(3 0) ///
+// 	graphregion(color(white)) ///
+// 	ytitle("`ytitle'", margin(medsmall)) ///
+// 	xtitle("Predicted polarization", margin(medsmall))
+// 	graph export "${figures}/final/`var'_validation.pdf", as(pdf) replace
 	
-	binsreg `var' prediction, ///
-	polyreg(3) polyregplotopt(lcolor(maroon)) nbins(20)  name(`var', replace) dots(3 0) ///
-	graphregion(color(white)) ///
-	ytitle("`ytitle'", margin(medsmall)) ///
-	xtitle("Predicted polarization", margin(medsmall))
+	
+	
+	* Generate binscatter bins
+	binscatter `var'  prediction, genxq(bins)
+
+	* Generate means by binscatter beans
+	egen anger_m = mean(`var' ), by(bins)
+	egen pred_m = mean(prediction), by(bins)
+
+	* Estimate the polynomial regression
+	reg `var'  prediction pred2 pred3
+	* Predict the anger values
+	predict yhat
+
+	* Restrict the graph to the 99th percentiles
+	xtile binlim = prediction, nquantiles(10000)
+	
+	
+	preserve
+	* Remove unnecessary observations (needed to reduce graph size)
+	keep anger_m pred_m yhat prediction binlim
+	replace yhat = round(yhat, `round_factor')
+	replace prediction = round(prediction, .001)
+	
+	
+	duplicates drop
+	* We restrict our graph to the 99th percentiles of our support
+	twoway (scatter anger_m pred_m, mcolor("76 114 176")) ///
+		   (line yhat prediction if binlim <= 9999 & binlim >= 1, sort), ///
+		   graphregion(color(white)) ///
+		   leg(off) ///
+		   ylab(, nogrid) ///
+		   ytitle("`ytitle'", margin(medsmall)) ///
+		   name(`var', replace) ///
+		   xlab(-1(0.5)1) ///
+		   xtitle("Predicted polarization", margin(medsmall))
 	graph export "${figures}/final/`var'_validation.pdf", as(pdf) replace
+	restore
+	
+	drop yhat binlim anger_m pred_m bins
 }
+
