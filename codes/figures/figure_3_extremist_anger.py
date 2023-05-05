@@ -117,9 +117,12 @@ def time_plot(dataframe, column, tag = "", y_label = "Odds Ratios", x = 'week_st
     elif column in ['center_left']:
         plt.yticks(np.arange(-0.15, 0.15, 0.05), fontsize = 30)
         max_value = 0.09
-    else:
+    elif column in ['center', 'center_right']:
         plt.yticks(np.arange(-0.05, 0.25, 0.05), fontsize = 30)
         max_value = 0.19
+    else:
+        plt.yticks(np.arange(-0.05, 0.05, 0.025), fontsize = 30)
+        max_value = 0.049
     locator = mdates.AutoDateLocator(minticks=12, maxticks=14)
     formatter = mdates.ConciseDateFormatter(locator)
     ax.xaxis.set_major_formatter(formatter)
