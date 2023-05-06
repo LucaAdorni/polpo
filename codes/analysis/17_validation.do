@@ -110,7 +110,7 @@ foreach var in anger pro_lock anti_gov immuni lombardia{
 	predict yhat
 
 	* Restrict the graph to the 99th percentiles
-	xtile binlim = prediction, nquantiles(10000)
+	xtile binlim = prediction, nquantiles(1000)
 	
 	
 	preserve
@@ -123,7 +123,7 @@ foreach var in anger pro_lock anti_gov immuni lombardia{
 	duplicates drop
 	* We restrict our graph to the 99th percentiles of our support
 	twoway (scatter anger_m pred_m, mcolor("76 114 176")) ///
-		   (line yhat prediction if binlim <= 9999 & binlim >= 1, sort), ///
+		   (line yhat prediction if binlim <= 999 & binlim >= 1, sort), ///
 		   graphregion(color(white)) ///
 		   leg(off) ///
 		   ylab(, nogrid) ///

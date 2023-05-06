@@ -193,33 +193,34 @@ df['pred'] = topic_dct['pred'].tolist()
 # Get the Top Tweets
 top_df = top_tweets(lda, topic_dct, vectorizer.get_feature_names(), no_top_words)
 
-# 0: Conte unable to manage the lockdown
-# 1: Mixed topic, both against UE's help (Fabio Rampelli's episode) and talking about Zaia's Veneto
-# 2: Government unable to manage the pandemic
-# 3: Against the government, democracy is harmed
-# 4: Xenophobia, both migrants + Roma's rom episode
-# 5: Against the "virus" terrorism, echoing words of Italian doctors
-# 6: Conspiracies - Government knew already
-# 7: Against Arcuri, head of Protezione Civile (i.e. govmnt mismanagement)
-# 8: Mixed Xenophobia + Conspiracies (i.e. Government already knew - predominant topic)
-# 9: Mix between government fault + dissatisfaction for closed churces
-# 10: Conspiracies - Dictatorship + Wuhan
-# 11: Against lockdowns + Cina's help
-# 12: Dictatorship (Global Government)
-# 13: Xenophobia (COVID-affected migrants trade) + Economic crisis
-# 14: Xenophobia (gov bus with Tunisian people) + Econ crisis
-# 15: Economic crisis
-# 16: Other, Travaglio complaining against the government
-# 17: Xenophobia, migrants
-# 18: Conspiracy - Wuhan
-# 19: Against government fear for COVID
 
+# 0: Covid-19 and migrants - ok
+# 1: Migrants - ok
+# 2: Government + Meloni + China - ok
+# 3: dictatorship - ok
+# 4: Other/empty - ok
+# 5: Anti-lockdown - ok
+# 6: Process against Conte - ok
+# 7: China supplying respirators (other) - ok
+# 8: Abuse of power - ok
+# 9: Secret documents of the government - ok
+# 10: Against excessive fear of Covid - ok
+# 11: Against government - ok
+# 12: MES + Against government - ok
+# 13: Against government - ok
+# 14: Against government + Migrants - ok
+# 15: Against Arcuri (government) - ok
+# 16: Against chinese/wuhan
+# 17: Secret documents of the government - ok
+# 18: Against government - ok
+# 19: Covid created in a lab - ok
 
 # Create macro-topics
-topic_dict = {'Xenophobia': [4, 13, 14, 17],
-              'Conspiracies': [3, 6, 8, 10, 12, 18],
-              'Government': [0, 1, 2, 5, 7, 9, 19],
-              'Other': [11, 15, 16]}
+topic_dict = {'Xenophobia': [0, 1, 14, 16],
+              'Anti-Government': [2, 5, 10, 11, 12, 13, 15, 18],
+              'Conspiracies': [3, 6, 8, 9, 17, 19],
+              'Other': [4, 7]}
+
 
 for k,v in topic_dict.items():
     topic_dict[k] = [f"topic_{i}" for i in v]
@@ -318,32 +319,37 @@ df['pred'] = topic_dct['pred'].tolist()
 # Get the Top Tweets
 top_df = top_tweets(lda, topic_dct, vectorizer.get_feature_names(), no_top_words)
 
-# 0: Pandemic spread + Sigonella fake news (spread virus)
-# 1: Xenophobia
-# 2: Discussion on masks
-# 3: COVID-19 Cases
-# 4: Plasma to cure COVID
-# 5: China/Conspiracies
-# 6: China/Conspiracies
-# 7: Cases
-# 8: Cases
-# 9: Cases
+# 0: Spreading fear
+# 1: Mismanagement from doctors
+# 2: Conspiracies (Wuhan + Gates)
+# 3: New strains
+# 4: Measures
+# 5: Migrants
+# 6: Migrants
+# 7: Vaccines
+# 8: Measures
+# 9: Measures
 # 10: Cases
-# 11: Cases
-# 12: Conspiracies
-# 13: Against closures
-# 14: Conspiracies
-# 15: Lockdown measures
-# 16: Cases/Measures
+# 11: Some conspiracies tweets
+# 12: Cases
+# 13: Something against lockdown etc.
+# 14: Migrants
+# 15: Cases
+# 16: Conspiracies
 # 17: Cases
-# 18: Vaccines
-# 19: Covid studies
+# 18: Cases
+# 19: Mismanagement
+
+i = 19
+df.loc[df.pred == f"topic_{i}"].tweet_text
+top_df.loc[top_df.Topic == f"topic_{i}"]
+
 
 # Create macro-topics
-topic_dict = {'Xenophobia': [1],
-              'Conspiracies': [5, 6, 12, 14],
-              'Lockdown': [2, 13, 15],
-              'Other': [0, 3, 4, 7, 8, 9, 10, 11, 16, 17, 18, 19]}
+topic_dict = {'Xenophobia': [5, 6, 14],
+              'Conspiracies': [2, 11, 16],
+              'Lockdown': [1, 19, 0],
+              'Other': [3, 4, 7, 8, 9, 10, 12, 13, 15, 17, 18]}
 
 for k,v in topic_dict.items():
     topic_dict[k] = [f"topic_{i}" for i in v]

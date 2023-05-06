@@ -202,9 +202,6 @@ except:
     # Now merge the two sets back
     final_df = post_df.merge(df, how = 'inner', on = ['week_start', 'scree_name'], validate = 'm:1')
 
-    # Remove any potential duplicates
-    final_df.drop_duplicates(inplace = True)
-
     # Save it
     final_df.to_pickle(f"{path_to_processed}tweet_for_topic.pkl.gz", compression = 'gzip')
 
