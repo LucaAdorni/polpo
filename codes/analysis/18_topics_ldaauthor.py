@@ -116,7 +116,7 @@ stem = True
 stem_tag = np.where(stem, "_stemm","")
 period = 'periods'
 # Number of topics
-n_topics = 5
+n_topics = 15
 
 # Load the dataset
 final_df = pd.read_pickle(f"{path_to_processed}cleaned_gsdmm_tweets{stem_tag}.pkl.gz", compression = 'gzip')
@@ -143,7 +143,7 @@ for key_w, week_date in week_dict.items():
     # And for health tweets
     vac_df = sub_df.loc[(sub_df.topic == 'health')|(sub_df.topic == 'vaccine')]
 
-    iter_dict = {'_pol': pol_df}
+    iter_dict = {'_pol': pol_df, '_vac': vac_df}
 
     for tag, df in iter_dict.items():
         print(tag)
