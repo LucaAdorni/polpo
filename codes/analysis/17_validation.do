@@ -110,7 +110,7 @@ foreach var in anger pro_lock anti_gov immuni lombardia{
 	predict yhat
 
 	* Restrict the graph to the 99th percentiles
-	xtile binlim = prediction, nquantiles(1000)
+	xtile binlim = prediction, nquantiles(100)
 	
 	
 	preserve
@@ -123,14 +123,14 @@ foreach var in anger pro_lock anti_gov immuni lombardia{
 	duplicates drop
 	* We restrict our graph to the 99th percentiles of our support
 	twoway (scatter anger_m pred_m, mcolor("76 114 176")) ///
-		   (line yhat prediction if binlim <= 999 & binlim >= 1, sort), ///
+		   (line yhat prediction if binlim <= 99 & binlim >= 1, sort), ///
 		   graphregion(color(white)) ///
 		   leg(off) ///
 		   ylab(, nogrid) ///
 		   ytitle("`ytitle'", margin(medsmall)) ///
 		   name(`var', replace) ///
 		   xlab(-1(0.5)1) ///
-		   xtitle("Predicted polarization", margin(medsmall))
+		   xtitle("Predicted Political Alignment", margin(medsmall))
 	graph export "${figures}/final/`var'_validation.pdf", as(pdf) replace
 	restore
 	
