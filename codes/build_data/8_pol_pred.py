@@ -55,7 +55,7 @@ percentage_filter = 0.4
 # Loop over a variety of Parameters
 learning_rates = [3e-5]
 batch_size = [32]
-EPOCHS = 6
+EPOCHS = 4
 
 merge_tweets = True # set to True if we want to merge all tweets
 only_politics = False # set to True if we want to keep only politic tweets
