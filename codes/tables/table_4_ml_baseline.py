@@ -75,7 +75,36 @@ res_ml_tuned = get_results(ml_tuned, tuned = "Yes")
 
 final_res = res_ml + res_ml_tuned
 
-table = tabulate(final_res, tablefmt = 'latex', headers = ['Model', 'Method', 'Tuning', 'MAE', "MSE", "R2"], floatfmt=".4f")
+table = tabulate(final_res, tablefmt = 'latex', headers = ['Model', 'Encoding', 'Tuning', 'MAE', "MSE", "R2"], floatfmt=".4f")
 
 with open(f'{path_to_tables}table_4_ml_baseline.tex', 'w') as f:
     f.write(table)
+
+
+# 2. BERT RESULTS -------------------------------------------------------------------------------------------------
+
+# Load also the BERT Results
+with open(f'{path_to_results}alberto_best_model_results.pickle', 'rb') as handle:
+    test_final = pickle.load( handle)
+
+
+# Make the ML results a pandas df
+table_df = pd.DataFrame(final_res, columns = ['Model', 'Encoding', 'Tuning', 'MAE', "MSE", "R2"])
+
+# Append the BERT model
+bert_df = pd.DataFrame([['AlBERTo', 'LM', 'Yes', test_final['MAE'], test_final['MSE'], test_final['R2']]]
+                       , columns = ['Model', 'Encoding', 'Tuning', 'MAE', "MSE", "R2"])
+table_df = pd.concat([table_df, bert_df], axis = 0)
+
+# Keep only the best model per group
+table_df['check'] = table_df.groupby(['Model']).MAE.transform('min') == table_df.MAE
+# Lasso results are all equal, keep only the TF
+table_df.loc[(table_df.Model == 'Lasso')&(table_df.Encoding != 'TF'), 'check'] = False
+table_df = table_df.loc[table_df.check].drop(columns = ['check'])
+
+# Reorder them correctly
+table_df.set_index("Model", inplace = True, drop = False)
+table_df = table_df.reindex(['Lasso', 'Random Forest', 'XGBoost', 'CatBoost', 'AlBERTo'])
+table_df.reset_index(inplace = True, drop = True)
+# Save to Latex
+table_df.to_latex(f'{path_to_tables}table_4_pred_res.tex', index = False, float_format = "%4.3f")
