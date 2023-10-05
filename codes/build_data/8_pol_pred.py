@@ -27,7 +27,7 @@ from sklearn.metrics import precision_score
 from sklearn.metrics import recall_score
 import seaborn as sns
 import matplotlib.pyplot as plt
-
+import statsmodels.api as sm
 import torch
 from torch.nn import functional as F
 from torch.utils.data import DataLoader, Dataset, RandomSampler, random_split
@@ -256,7 +256,8 @@ def evaluate(model, test, batch_size = 32, bert_model = ''):
 
     mae = mean_absolute_error(total_preds.labels, total_preds.pred)
     mse = mean_squared_error(total_preds.labels, total_preds.pred)
-    r_squared = r2_score(total_preds.labels, total_preds.pred)
+    mod_ols = sm.OLS(total_preds.labels, sm.add_constant(total_preds.pred)).fit(cov_type = 'HC1')
+    r_squared = 1-mod_ols.ssr/mod_ols.uncentered_tss
     
     print(f'MAE: {mae: .3f}')
     print(f'MSE: {mse: .3f}')

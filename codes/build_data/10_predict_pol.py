@@ -36,6 +36,9 @@ from pathlib import PurePosixPath
 import itertools
 from torch import nn
 from tqdm import tqdm
+from sklearn.metrics import mean_absolute_error
+from sklearn.metrics import mean_squared_error
+import statsmodels.api as sm
 
 try:
     # Setup Repository
@@ -292,6 +295,51 @@ def predict_from_model(model, data, batch_size = 32, bert_model = ''):
 
     return total_preds
 
+def evaluate(model, test, batch_size = 32, bert_model = ''):
+
+    dataloader = torch.utils.data.DataLoader(test, batch_size = batch_size)
+    use_cuda = torch.cuda.is_available()
+    device = torch.device("cuda" if use_cuda else "cpu")
+
+    if use_cuda:
+
+        model = model.cuda()
+
+    model.eval()
+    total_preds = []
+    with torch.no_grad():
+    
+        for data_input, data_label, data_index in tqdm(dataloader):
+          
+            data_label = data_label.to(device)
+            mask = data_input['attention_mask'].to(device)
+            input_id = data_input['input_ids'].squeeze(1).to(device)
+            output = model(input_id, mask)
+            output = output.squeeze(-1)
+            preds = output.detach().cpu().numpy()
+            total_preds.extend(list(preds))
+
+    if merge_tweets:
+      mean_out, mean_index = mean_by_label(total_preds, test.index)
+      total_preds = pd.DataFrame({'pred': total_preds, 'labels': test.labels}, index = test.index)
+      for i, m_index in enumerate(mean_index):
+        total_preds.loc[total_preds.index == mean_index[i], "pred"] = mean_out[i]
+      total_preds = total_preds.groupby(total_preds.index).mean()
+
+
+    mae = mean_absolute_error(total_preds.labels, total_preds.pred)
+    mse = mean_squared_error(total_preds.labels, total_preds.pred)
+    mod_ols = sm.OLS(total_preds.labels, sm.add_constant(total_preds.pred)).fit(cov_type = 'HC1')
+    r_squared = 1-mod_ols.ssr/mod_ols.uncentered_tss
+    
+    print(f'MAE: {mae: .3f}')
+    print(f'MSE: {mse: .3f}')
+    print(f'R2: {r_squared: .3f}')
+
+    test_final = {'MAE': mae, 'MSE': mse, 'R2': r_squared}
+
+    return test_final
+
 
 model = BertClassifier()
 random.seed(random_seed)
@@ -302,6 +350,14 @@ if torch.cuda.is_available():
 
 model.load_state_dict(torch.load(f'{path_to_models}best_torch_{learning_rate}_{batch_size}_{epoch_num}{percentage_filter}.pt', map_location = 'cpu'))
 
+# Save results for test dataset
+test = pd.read_pickle(f"{path_to_processed}df_test{merged_tag}.pkl.gz", compression = 'gzip')
+test = Dataset(test, percentage_filter = percentage_filter)
+test_final = evaluate(model, test, batch_size = batch_size)
+with open(f'{path_to_results}alberto_best_model_results.pickle', 'wb') as handle:
+    pickle.dump(test_final, handle)
+
+# Get predictions for all the observations
 pred['final_polarization'] = 100
 batch_dataset = Dataset(pred)
 final_predictions = predict_from_model(model, batch_dataset, batch_size = 128, bert_model = '')

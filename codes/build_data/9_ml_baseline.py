@@ -34,6 +34,7 @@ from sklearn.model_selection import RandomizedSearchCV, GridSearchCV
 from catboost import CatBoostRegressor
 import lightgbm
 import xgboost as xgb
+import statsmodels.api as sm
 
 ##for clustering
 
@@ -88,7 +89,8 @@ def evaluate_model(X_df, y_df, model):
     preds = model.predict(X_df)
     mae = mean_absolute_error(y_df, preds)
     mse = mean_squared_error(y_df, preds)
-    r_squared = r2_score(y_df, preds)
+    mod_ols = sm.OLS(y_df, sm.add_constant(preds)).fit(cov_type = 'HC1')
+    r_squared = 1-mod_ols.ssr/mod_ols.uncentered_tss
     print(f'MAE: {mae: .3f}')
     print(f'MSE: {mse: .3f}')
     print(f'R2: {r_squared: .3f}')
@@ -101,7 +103,7 @@ model_dict = {
     #,'lightgbm': lightgbm.LGBMRegressor(random_state = random_seed, n_jobs = -1)
     , 'lasso': Lasso(random_state = random_seed)
     , 'catboost': CatBoostRegressor(random_state = random_seed)
-    #, 'xgboost': xgb.XGBRegressor(random_state = random_seed, n_jobs = -1)
+    , 'xgboost': xgb.XGBRegressor(random_state = random_seed, n_jobs = -1)
 }
 
 # PARAMETERS FOR LOGISTIC REGRESSION -------
