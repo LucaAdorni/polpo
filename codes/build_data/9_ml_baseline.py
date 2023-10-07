@@ -102,7 +102,7 @@ model_dict = {
     'rand_for': RandomForestRegressor(random_state = random_seed, n_jobs = -1)
     #,'lightgbm': lightgbm.LGBMRegressor(random_state = random_seed, n_jobs = -1)
     , 'lasso': Lasso(random_state = random_seed)
-    , 'catboost': CatBoostRegressor(random_state = random_seed)
+    ,'catboost': CatBoostRegressor(random_state = random_seed, thread_count = -1, verbose = False)
     , 'xgboost': xgb.XGBRegressor(random_state = random_seed, n_jobs = -1)
 }
 
@@ -151,11 +151,11 @@ param_lgb = {'max_depth': max_depth,
              'reg_lambda': [0, 1e-1, 1, 5, 10, 20, 50, 100]}
 
 # PARAMETERS FOR XGBOOST -----------
-param_xgb = {'max_depth': max_depth,
+param_xgb = {'max_depth': [int(x) for x in np.linspace(2, 16, num = 11)],
              'n_estimators': n_estimators,
              'learning_rate': learn_rate,
-             'colsample_bytree': list(np.linspace(0.1, 1, num = 10)),
-             'subsample': list(np.linspace(0.1, 1, num = 10)),
+             'colsample_bytree': list(np.linspace(0.1, 1, num = 5)),
+             'subsample': list(np.linspace(0.1, 1, num = 5)),
              'reg_alpha': [0, 1e-1, 1, 2, 5, 7, 10, 50, 100],
              'reg_lambda': [0, 1e-1, 1, 5, 10, 20, 50, 100]}
 
@@ -212,7 +212,7 @@ for method in method_list:
             print('Fitting Model')
             model = model_dict[estimator]
             if tune_models:
-                gridsearch = RandomizedSearchCV(model, param_dictionary[estimator], cv = 5, n_jobs = -1)
+                gridsearch = RandomizedSearchCV(model, param_dictionary[estimator], cv = 5, n_jobs = -1, verbose = 4)
                 gridsearch.fit(X_train, y_train.final_polarization)
                 model = gridsearch.best_estimator_
             else:
