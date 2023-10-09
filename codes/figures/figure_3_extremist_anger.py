@@ -224,13 +224,13 @@ def double_lineplot(df, col1, col2, col1_name, col2_name, label_1, label_2, tag 
     plt.xticks(fontsize = 30)
     if ax_2 == True:
         ax2 = ax.twinx()   
-        ax2.set_ylabel(f"{col2_name} (%)", fontsize = 28)
+        ax2.set_ylabel(f"{col2_name} (%)", fontsize = 35)
     else:
         ax2 = ax
     sns.lineplot(data=df2, x = 'week_start', y=f"value"
                 , ax=ax2, label = label_2, legend = False, color = 'darkorange', linestyle = '--')
-    plt.yticks(fontsize = 35)
-    plt.xticks(fontsize = 35)
+    plt.yticks(fontsize = 30)
+    plt.xticks(fontsize = 30)
 
     if col1 in ['far_right', 'extremism_toright']:
         ax.set_yticks(np.arange(-0.0025, 0.0125, 0.0025), fontsize = 30)
