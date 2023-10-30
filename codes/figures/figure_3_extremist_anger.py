@@ -182,13 +182,13 @@ def double_scatter(df, col1, col2, col1_name, col2_name, tag = ""):
     # calculate Pearson's correlation
     pearson, _ = pearsonr(df1[f"b{col1}"], df1[f"b{col2}"])
     spear, _ = spearmanr(df1[f"b{col1}"], df1[f"b{col2}"])
-    mod_ols = sm.OLS(df1[f"b{col2}"],df1[f"b{col1}"]).fit()
+    mod_ols = sm.OLS(df1[f"b{col2}"],sm.add_constant(df1[f"b{col1}"])).fit()
     fig, ax = plt.subplots(figsize=(15, 10))
     sns.regplot(x=df1[f"b{col1}"], y=df1[f"b{col2}"], ax = ax, scatter_kws = {"s": 100})
     sns.despine()
     ax.text(df1[f"b{col1}"].min(), df1[f"b{col2}"].max()*1.3,
-             "OLS slope: {:4.3f}, R2: {:4.3f}".format(
-                mod_ols.params[-1], 1-mod_ols.ssr/mod_ols.uncentered_tss), 
+             "OLS slope: {:4.3f} ({:4.3f})".format(
+                mod_ols.params[-1], mod_ols.bse[-1]), 
                 fontsize = 30)
     ax.text(df1[f"b{col1}"].min(), df1[f"b{col2}"].max()*1.15,
              "Pearson: {:4.3f}, Spearman: {:4.3f}".format(
