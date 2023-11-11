@@ -79,7 +79,10 @@ def time_plot(dataframe, column, tag = "", y_label = "Odds Ratios", x = 'week_st
     dataframe.loc[dataframe.dist == '-7 days', 'value'] = 0
     fig, ax = plt.subplots(figsize=(15, 10))
     ax.ticklabel_format(style='plain')
-    sns.lineplot(data = dataframe, x = x, y = "value", ax = ax)
+    if column == "anger":
+        sns.lineplot(data = dataframe, x = x, y = "value", ax = ax, color = 'darkorange')
+    else:
+        sns.lineplot(data = dataframe, x = x, y = "value", ax = ax)
     sns.despine()
 
     if x == 'month':
@@ -120,6 +123,9 @@ def time_plot(dataframe, column, tag = "", y_label = "Odds Ratios", x = 'week_st
     elif column in ['center', 'center_right']:
         plt.yticks(np.arange(-0.10, 0.15, 0.05), fontsize = 30)
         max_value = 0.09
+    elif column in ['anger']:
+        plt.yticks(np.arange(-0.05, 0.25, 0.05),  fontsize = 30)
+        max_value = 0.19
     else:
         plt.yticks(np.arange(-0.015, 0.045, 0.01), fontsize = 30)
         max_value = 0.034
@@ -288,7 +294,8 @@ v = iter_dict[y]
 double_lineplot(store_odds, col1 = y, col2 = emo, col1_name= v, col2_name = emo.capitalize(), label_1 = v, label_2 = emo.capitalize(), tag="fig_3_")
 double_scatter(store_odds, col1 = y, col2 = emo, col1_name= v, col2_name = emo.capitalize(), tag="fig_3_")
         
-
+# Plot anger levels
+time_plot(store_odds, 'anger', "fig_a4_", y_label = 'Anger')
 
 # APPENDIX FIGURES ---------------------------------------------------
 
