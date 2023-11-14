@@ -202,6 +202,7 @@ def double_scatter(df, col1, col2, col1_name, col2_name, tag = ""):
                 fontsize = 30)
     plt.yticks(fontsize = 30)
     plt.xticks(fontsize = 30)
+    ax.set_yticks(np.arange(-0.05, 0.25, 0.05), fontsize = 30)
     ax.set_ylabel(f"{col2_name} (%)", fontsize = 35)
     ax.set_xlabel(f"{col1_name} (%)", fontsize = 35)
     save_fig(f'{path_to_figures_final}{tag}{col1}_{col2}_scatter')
